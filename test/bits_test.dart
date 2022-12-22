@@ -3,35 +3,6 @@ import 'dart:math';
 import 'package:bits/bits.dart';
 import 'package:test/test.dart';
 
-Iterable<int> randomInts(int count) sync* {
-  final random = Random();
-  for (var i = 0; i < count; i++) {
-    yield random.nextInt(0x100000000) * (random.nextBool() ? -1 : 1);
-  }
-}
-
-Iterable<double> randomDoubles(int count) sync* {
-  final random = Random();
-  for (var i = 0; i < count; i++) {
-    yield random.nextDouble() *
-        212949.113456345634564 *
-        (random.nextBool() ? -1 : 1);
-  }
-}
-
-BitBuffer newRandomBuffer() {
-  BitBuffer buf = BitBuffer();
-  buf.writeVarUInt(Random().nextInt(10));
-  buf.writeVarUInt(Random().nextInt(100));
-  buf.writeVarUInt(Random().nextInt(1000));
-  buf.writeVarUInt(Random().nextInt(10000));
-  buf.writeVarUInt(Random().nextInt(100000));
-  buf.writeVarUInt(Random().nextInt(1000000));
-  buf.writeVarUInt(Random().nextInt(10000000));
-  buf.writeVarUInt(Random().nextInt(100000000));
-  return buf;
-}
-
 void main() {
   for (double iff = 1; iff < 123456; iff *= 2.3456789123456789) {
     for (int t = 1; t < 9; t += 3) {
@@ -39,8 +10,8 @@ void main() {
       final double it = BitBuffer.truncate(i, t);
       test('Write VarDouble ${i} with $t precision', () {
         BitBuffer buf = BitBuffer();
-        buf.writeVarDouble(i, maxPrecision: t);
-        double out = buf.readVarDouble(maxPrecision: t);
+        buf.writeDouble(i, maxPrecision: t);
+        double out = buf.readDouble(maxPrecision: t);
         expect(out, equals(it),
             reason:
                 'Reading VarDouble ${it}, got ${out} instead (truncated to ${t} digits)');
@@ -54,8 +25,8 @@ void main() {
   for (int i = 1; i < 123456; i *= 3) {
     test('Write UInt ${i}', () {
       BitBuffer buf = BitBuffer();
-      buf.writeUInt(i);
-      int out = buf.readUInt();
+      buf.writeInt(i, signed: false);
+      int out = buf.readInt(signed: false);
       expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
       expect(buf.getAvailableBits(), equals(0),
           reason: 'Reading UInt had leftover bits from write!');
@@ -72,8 +43,8 @@ void main() {
 
     test('Write VarUInt ${i}', () {
       BitBuffer buf = BitBuffer();
-      buf.writeVarUInt(i);
-      int out = buf.readVarUInt();
+      buf.writeVarInt(i, signed: false);
+      int out = buf.readVarInt(signed: false);
       expect(out, equals(i),
           reason: 'Reading VarUInt ${i}, got ${out} instead');
       expect(buf.getAvailableBits(), equals(0),
@@ -103,8 +74,8 @@ void main() {
   test('VarUIntLists', () {
     BitBuffer buf = BitBuffer();
     List<int> ints = randomInts(4).map((e) => e.abs()).toList();
-    buf.writeVarUInts(ints);
-    List<int> out = buf.readVarUInts();
+    buf.writeVarInts(ints, signed: false);
+    List<int> out = buf.readVarInts(signed: false);
     expect(out, equals(ints),
         reason: 'Reading VarUInts ${ints}, got ${out} instead');
   });
@@ -116,16 +87,6 @@ void main() {
     List<int> out = buf.readVarInts();
     expect(out, equals(ints),
         reason: 'Reading VarInts ${ints}, got ${out} instead');
-  });
-
-  test('VarDoubleLists', () {
-    BitBuffer buf = BitBuffer();
-    List<double> doubles = randomDoubles(5).toList();
-    buf.writeVarDoubles(doubles, maxPrecision: 5);
-    List<double> out = buf.readVarDoubles(maxPrecision: 5);
-    expect(out.map((e) => BitBuffer.truncate(e, 4)),
-        equals(doubles.map((e) => BitBuffer.truncate(e, 4))),
-        reason: 'Reading VarDoubles ${doubles}, got ${out} instead');
   });
 
   test('BitBuffer to/from base64', () {
@@ -180,4 +141,33 @@ void main() {
         equals(buf.toByteData().buffer.asUint8List()),
         reason: 'BitBuffer to/from byteData failed');
   });
+}
+
+Iterable<int> randomInts(int count) sync* {
+  final random = Random();
+  for (var i = 0; i < count; i++) {
+    yield random.nextInt(0x100000000) * (random.nextBool() ? -1 : 1);
+  }
+}
+
+Iterable<double> randomDoubles(int count) sync* {
+  final random = Random();
+  for (var i = 0; i < count; i++) {
+    yield random.nextDouble() *
+        212949.113456345634564 *
+        (random.nextBool() ? -1 : 1);
+  }
+}
+
+BitBuffer newRandomBuffer() {
+  BitBuffer buf = BitBuffer();
+  buf.writeVarInt(Random().nextInt(10) - Random().nextInt(10));
+  buf.writeVarInt(Random().nextInt(100) - Random().nextInt(100));
+  buf.writeVarInt(Random().nextInt(1000) - Random().nextInt(1000));
+  buf.writeVarInt(Random().nextInt(10000) - Random().nextInt(10000));
+  buf.writeVarInt(Random().nextInt(100000) - Random().nextInt(100000));
+  buf.writeVarInt(Random().nextInt(1000000) - Random().nextInt(1000000));
+  buf.writeVarInt(Random().nextInt(10000000) - Random().nextInt(10000000));
+  buf.writeVarInt(Random().nextInt(100000000) - Random().nextInt(100000000));
+  return buf;
 }

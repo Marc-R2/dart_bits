@@ -8,9 +8,35 @@ import 'package:threshold/threshold.dart';
 
 void main() {
   BitBuffer buf = BitBuffer();
-  
+  List<int> set = [3, 8];
+
+  buf.writeVarInt(7, steps: set, signed: false);
+  buf.writeVarInt(3, steps: set, signed: false);
+  buf.writeVarInt(211, steps: set, signed: false);
+
+  print(buf.getAvailableBits());
   print(buf.toString());
 }
+
+const List<int> _bits4x8_64 = [8, 16, 32, 64];
+const List<int> _bits4xLIST = [2, 7, 10, 64];
+const List<int> _bits8xLOW = [2, 5, 8, 9, 10, 13, 24, 64];
+const List<int> _bits4xLOW = [3, 8, 13, 64];
+const List<int> _bits2x32_64 = [32, 64];
+const List<int> _bits2x16_32 = [16, 32];
+const List<int> _defaultSteps = _bits4x8_64;
+
+const List<List<int>> _defaultPackedSet = [
+  _bits4x8_64,
+  _bits4xLOW,
+  _bits8xLOW,
+];
+
+const List<List<int>> _listPackedSet = [
+  _bits4x8_64,
+  _bits4xLIST,
+  _bits8xLOW,
+];
 
 class BitEvent<T> {
   final BitValueReader<T> reader;
@@ -85,88 +111,54 @@ class BitBuffer {
   factory BitBuffer.fromBase64(String compressed) =>
       BitBuffer.fromBytes(base64Decode(compressed));
 
-  void writePackedVarInt(int i) {
+  void writePackedVarInt(int i,
+      {bool signed = true, List<List<int>> stepSet = _defaultPackedSet}) {
     int bits = getBitsNeeded(i.abs());
     BitBuffer a = BitBuffer();
     a.writeBits(1, 2); // 1 = packed
     a.writeBits(bits, 6);
     a.writeBits(i.abs(), bits);
-    a.writeSign(i);
+    if (signed) {
+      a.writeSign(i);
+    }
 
     BitBuffer b = BitBuffer();
-    b.writeBits(0, 2); // 0 = varint
-    b.writeVarInt(i);
+    b.writeBits(0, 2);
+    b.writeVarInt(i, signed: signed, steps: stepSet[0]);
 
     BitBuffer c = BitBuffer();
-    c.writeBits(2, 2); // 2 = raw 32
-    c.writeBits(i.abs(), 32);
-    c.writeSign(i);
+    c.writeBits(2, 2);
+    c.writeVarInt(i, signed: signed, steps: stepSet[1]);
 
     BitBuffer d = BitBuffer();
-    d.writeBits(3, 2); // 3 = raw 64
-    d.writeBits(i.abs(), 64);
-    d.writeSign(i);
-    List<BitBuffer> bx = [a, b, if (bits <= 32) c, d];
+    d.writeBits(3, 2);
+    d.writeVarInt(i, signed: signed, steps: stepSet[2]);
+    List<BitBuffer> bx = [a, b, c, d];
     addBits(bx
         .reduce((a, b) => a.getAvailableBits() < b.getAvailableBits() ? a : b)
         ._bits);
   }
 
-  int readPackedVarInt() {
+  int readPackedVarInt(
+      {bool signed = true, List<List<int>> stepSet = _defaultPackedSet}) {
     int type = read(2);
     if (type == 0) {
-      return readVarInt();
+      return readVarInt(signed: signed, steps: stepSet[0]);
     } else if (type == 1) {
       int bits = read(6);
       int i = read(bits);
-      return readSign() ? i : -i;
+      return signed
+          ? readSign()
+              ? i
+              : -i
+          : i;
     } else if (type == 2) {
-      int i = read(32);
-      return readSign() ? i : -i;
+      return readVarInt(signed: signed, steps: stepSet[1]);
     } else if (type == 3) {
-      int i = read(64);
-      return readSign() ? i : -i;
+      return readVarInt(signed: signed, steps: stepSet[2]);
     } else {
       throw Exception("Invalid type");
     }
-  }
-
-  void writePackedVarUInt(int i) {
-    int bits = getBitsNeeded(i.abs());
-    BitBuffer a = BitBuffer();
-    a.writeBits(1, 2); // 1 = packed
-    a.writeBits(bits, 6);
-    a.writeBits(i, bits);
-    BitBuffer b = BitBuffer();
-    b.writeBits(0, 2); // 0 = varint
-    b.writeVarUInt(i);
-    BitBuffer c = BitBuffer();
-    c.writeBits(2, 2); // 2 = raw 32
-    c.writeBits(i, 32);
-    BitBuffer d = BitBuffer();
-    d.writeBits(3, 2); // 3 = raw 64
-    d.writeBits(i, 64);
-    addBits([a, b, c, d]
-        .reduce((a, b) => a.getAvailableBits() < b.getAvailableBits() ? a : b)
-        ._bits);
-  }
-
-  int readPackedVarUInt() {
-    int type = read(2);
-    if (type == 0) {
-      return readVarUInt();
-    } else if (type == 1) {
-      int bits = read(6);
-      int value = read(bits);
-      return value;
-    } else if (type == 2) {
-      int value = read(32);
-      return value;
-    } else if (type == 3) {
-      int value = read(64);
-      return value;
-    }
-    return 0;
   }
 
   void addBits(List<bool> bits) {
@@ -183,11 +175,13 @@ class BitBuffer {
     return bits;
   }
 
-  int readInt() => readPackedVarInt();
-  int readUInt() => readPackedVarUInt();
+  int readInt(
+          {bool signed = true, List<List<int>> stepSet = _defaultPackedSet}) =>
+      readPackedVarInt(signed: signed, stepSet: stepSet);
 
-  void writeInt(int i) => writePackedVarInt(i);
-  void writeUInt(int i) => writePackedVarUInt(i);
+  void writeInt(int i,
+          {bool signed = true, List<List<int>> stepSet = _defaultPackedSet}) =>
+      writePackedVarInt(i, signed: signed, stepSet: stepSet);
 
   bool hasAvailableBits(int minimum) => _bits.length >= minimum;
 
@@ -197,26 +191,21 @@ class BitBuffer {
 
   bool readSign() => _bits.removeAt(0);
 
-  int readISign() => _bits.removeAt(0) ? 1 : 0;
-
-  void writeVarInt(int i) => (this..writeSign(i)).writeVarUInt(i.abs());
-
-  int readVarInt() => readSign() ? readVarUInt() : -readVarUInt();
-
   String toString() => toBase64Compressed();
 
-  void writeVarDouble(double dd, {int maxPrecision = 8}) {
+  void writeDouble(double dd,
+      {int maxPrecision = 8, List<int> steps = _defaultSteps}) {
     assert(maxPrecision <= 15, "maxPrecision must be <= 15");
     double d = truncate(dd, maxPrecision);
     int moves = _getDecimalMoves(d, maxPrecision: maxPrecision);
     writeBits(moves, getBitsNeeded(maxPrecision));
-    writeInt((d * pow(10, moves)).toInt());
+    writeVarInt((d * pow(10, moves)).toInt(), steps: steps);
   }
 
-  double readVarDouble({int maxPrecision = 8}) {
+  double readDouble({int maxPrecision = 8, List<int> steps = _defaultSteps}) {
     assert(maxPrecision <= 15, "maxPrecision must be <= 15");
     int precision = read(getBitsNeeded(maxPrecision));
-    return readInt().toDouble() / pow(10, precision).toDouble();
+    return readVarInt(steps: steps).toDouble() / pow(10, precision).toDouble();
   }
 
   static double truncate(double d, int precision) {
@@ -243,16 +232,6 @@ class BitBuffer {
     return g;
   }
 
-  double readDouble32() => (ByteData(4)..setInt32(0, readInt())).getFloat32(0);
-
-  double readDouble64() => (ByteData(8)..setInt64(0, readInt())).getFloat64(0);
-
-  void writeDouble32(double d) =>
-      writeInt((ByteData(4)..setFloat32(0, d)).getInt32(0));
-
-  void writeDouble64(double d) =>
-      writeInt((ByteData(8)..setFloat64(0, d)).getInt64(0));
-
   void _setBytes(List<int> bytes) {
     _bits = [];
     for (int i = 0; i < bytes.length; i++) {
@@ -262,105 +241,101 @@ class BitBuffer {
     }
   }
 
+  static double lerp(double a, double b, double t) => a + (b - a) * t;
+
+  static int lerpBits(int minBits, int maxBits, double t) =>
+      minBits + ((maxBits - minBits) * t).round();
+
+  static List<int> genStepSet({int? minValue, int? maxValue, int steps = 4}) {
+    int minBits = max(minValue == null ? 1 : getBitsNeeded(minValue), 1);
+    int maxBits = max(maxValue == null ? 64 : getBitsNeeded(maxValue), 2);
+    int stepSize = (maxBits - minBits) ~/ steps;
+    List<int> stepSet = [];
+    for (int i = 0; i < steps; i++) {
+      stepSet.add(minBits + (stepSize * i));
+    }
+
+    return stepSet;
+  }
+
+  static List<int> genLowStepSet(
+      {int? minValue, int? softMaxValue, int? maxValue, int steps = 4}) {
+    int minBits = max(minValue == null ? 1 : getBitsNeeded(minValue), 1);
+    int maxBits =
+        max(softMaxValue == null ? 64 : getBitsNeeded(softMaxValue), 2);
+    int maxBits2 = max(maxValue == null ? 64 : getBitsNeeded(maxValue), 2);
+    int stepSize = (maxBits - minBits) ~/ (steps - 1);
+    List<int> stepSet = [];
+    for (int i = 0; i < (steps - 1); i++) {
+      stepSet.add(minBits + (stepSize * i));
+    }
+
+    stepSet[stepSet.length - 1] = maxBits2;
+
+    return stepSet;
+  }
+
   static bool getBit(int value, int bit) => (value & (1 << bit)) != 0;
 
   static int setBit(int value, int bit, bool on) =>
       on ? value | (1 << bit) : value & ~(1 << bit);
 
-  void writeVarDoubles(Iterable<double> m, {int maxPrecision = 8}) {
-    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
-    writeVarUInt(m.length);
-    m.forEach((element) => writeVarDouble(element, maxPrecision: maxPrecision));
-  }
-
   String toBase64Compressed() => compress(toBase64());
 
   String toBase64() => base64Encode(toBytes());
 
-  List<double> readVarDoubles({int maxPrecision = 8}) {
-    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
-    List<double> m = [];
-    int length = readVarUInt();
-    for (int i = 0; i < length; i++) {
-      m.add(readVarDouble(maxPrecision: maxPrecision));
-    }
-    return m;
-  }
-
-  void writeVarInts(Iterable<int> m) {
+  void writeVarInts(Iterable<int> m, {bool signed = true}) {
     int maxBits = m.map((i) => getBitsNeeded(i.abs())).reduce(max);
-    writeVarUInt(m.length);
-    writeVarUInt(maxBits);
+    writeInt(m.length, signed: false, stepSet: _listPackedSet);
+    writeInt(maxBits, signed: false);
     m.forEach((i) {
-      writeSign(i);
+      if (signed) {
+        writeSign(i);
+      }
       writeBits(i.abs(), maxBits);
     });
   }
 
-  List<int> readVarInts() {
-    int count = readVarUInt();
-    int maxBits = readVarUInt();
+  List<int> readVarInts({bool signed = true}) {
+    int count = readInt(signed: false, stepSet: _listPackedSet);
+    int maxBits = readInt(signed: false);
     List<int> m = [];
     for (int i = 0; i < count; i++) {
-      m.add(readSign() ? read(maxBits) : -read(maxBits));
+      m.add(signed
+          ? readSign()
+              ? read(maxBits)
+              : -read(maxBits)
+          : read(maxBits));
     }
     return m;
   }
 
-  void writeVarUInts(Iterable<int> m) {
-    int maxBits = m.map((i) => getBitsNeeded(i)).reduce(max);
-    writeVarUInt(m.length);
-    writeVarUInt(maxBits);
-    m.forEach((element) => writeBits(element, maxBits));
-  }
-
-  List<int> readVarUInts() {
-    int count = readVarUInt();
-    int maxBits = readVarUInt();
-    List<int> m = [];
-    for (int i = 0; i < count; i++) {
-      m.add(read(maxBits));
-    }
-    return m;
-  }
-
-  int readVarUInt() {
-    int indicator = read(2);
-    int bits = 0;
-    if (indicator == 0) {
-      bits = 8;
-    } else if (indicator == 1) {
-      bits = 16;
-    } else if (indicator == 2) {
-      bits = 32;
-    } else if (indicator == 3) {
-      bits = 64;
-    }
-    return read(bits);
-  }
-
-  void writeVarUInt(int value) {
-    assert(value >= 0, "Value must be positive");
-
-    int bits = getBitsNeeded(value);
-    int indicator = 0;
-
-    if (bits <= 8) {
-      indicator = 0;
-      bits = 8;
-    } else if (bits <= 16) {
-      indicator = 1;
-      bits = 16;
-    } else if (bits <= 32) {
-      indicator = 2;
-      bits = 32;
-    } else if (bits <= 64) {
-      indicator = 3;
-      bits = 64;
+  void writeVarInt(int value,
+      {List<int> steps = _defaultSteps, bool signed = true}) {
+    if (signed) {
+      writeSign(value);
     }
 
-    writeBits(indicator, 2);
-    writeBits(value, bits);
+    int groupBitsNeeded = getBitsNeeded(steps.length);
+    int bitsNeeded = getBitsNeeded(value.abs());
+    for (int i = 0; i < steps.length; i++) {
+      if (bitsNeeded <= steps[i]) {
+        writeBits(i, groupBitsNeeded);
+        writeBits(value.abs(), steps[i]);
+        return;
+      }
+    }
+    throw Exception(
+        "Value too large for max bits! $value needs $bitsNeeded but the max is ${steps.last}, all steps are $steps");
+  }
+
+  int readVarInt({List<int> steps = _defaultSteps, bool signed = true}) {
+    bool sign = signed ? readSign() : true;
+    int groupBitsNeeded = getBitsNeeded(steps.length);
+    int group = read(groupBitsNeeded);
+    int bitsNeeded = steps[group];
+    int value = read(bitsNeeded);
+    return sign ? value : -value;
   }
 
   int read(int bits) {
