@@ -52,6 +52,24 @@ void main() {
   }
 
   for (int i = 1; i < 123456; i *= 3) {
+    test('Write UInt ${i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeUInt(i);
+      int out = buf.readUInt();
+      expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading UInt had leftover bits from write!');
+    });
+
+    test('Write Int ${i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeInt(i);
+      int out = buf.readInt();
+      expect(out, equals(i), reason: 'Reading Int ${i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading Int had leftover bits from write!');
+    });
+
     test('Write VarUInt ${i}', () {
       BitBuffer buf = BitBuffer();
       buf.writeVarUInt(i);

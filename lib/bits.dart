@@ -6,6 +6,63 @@ import 'dart:typed_data';
 
 import 'package:threshold/threshold.dart';
 
+void main() {
+  BitBuffer buf = BitBuffer();
+  
+  print(buf.toString());
+}
+
+class BitEvent<T> {
+  final BitValueReader<T> reader;
+  final BitValueWriter<T> writer;
+
+  BitEvent({required this.reader, required this.writer});
+}
+
+typedef BitValueReader<T> = T Function();
+typedef BitValueWriter<T> = void Function(T value);
+
+class BitInteger extends BitEvent<int> {
+  BitInteger(
+      {required BitValueReader<int> reader,
+      required BitValueWriter<int> writer})
+      : super(reader: reader, writer: writer);
+}
+
+class BitDouble extends BitEvent<double> {
+  BitDouble(
+      {required BitValueReader<double> reader,
+      required BitValueWriter<double> writer})
+      : super(reader: reader, writer: writer);
+}
+
+class BitPlan {
+  List<BitEvent> events = [];
+
+  BitPlan();
+
+  BitPlan write(BitEvent<dynamic> k) {
+    events.add(k);
+    return this;
+  }
+
+  Iterable<int> pullInts() sync* {
+    for (var e in events) {
+      if (e is BitInteger) {
+        yield e.reader();
+      }
+    }
+  }
+
+  Iterable<double> pullDoubles() sync* {
+    for (var e in events) {
+      if (e is BitDouble) {
+        yield e.reader();
+      }
+    }
+  }
+}
+
 class BitBuffer {
   List<bool> _bits = [];
 
@@ -28,6 +85,110 @@ class BitBuffer {
   factory BitBuffer.fromBase64(String compressed) =>
       BitBuffer.fromBytes(base64Decode(compressed));
 
+  void writePackedVarInt(int i) {
+    int bits = getBitsNeeded(i.abs());
+    BitBuffer a = BitBuffer();
+    a.writeBits(1, 2); // 1 = packed
+    a.writeBits(bits, 6);
+    a.writeBits(i.abs(), bits);
+    a.writeSign(i);
+
+    BitBuffer b = BitBuffer();
+    b.writeBits(0, 2); // 0 = varint
+    b.writeVarInt(i);
+
+    BitBuffer c = BitBuffer();
+    c.writeBits(2, 2); // 2 = raw 32
+    c.writeBits(i.abs(), 32);
+    c.writeSign(i);
+
+    BitBuffer d = BitBuffer();
+    d.writeBits(3, 2); // 3 = raw 64
+    d.writeBits(i.abs(), 64);
+    d.writeSign(i);
+    List<BitBuffer> bx = [a, b, if (bits <= 32) c, d];
+    addBits(bx
+        .reduce((a, b) => a.getAvailableBits() < b.getAvailableBits() ? a : b)
+        ._bits);
+  }
+
+  int readPackedVarInt() {
+    int type = read(2);
+    if (type == 0) {
+      return readVarInt();
+    } else if (type == 1) {
+      int bits = read(6);
+      int i = read(bits);
+      return readSign() ? i : -i;
+    } else if (type == 2) {
+      int i = read(32);
+      return readSign() ? i : -i;
+    } else if (type == 3) {
+      int i = read(64);
+      return readSign() ? i : -i;
+    } else {
+      throw Exception("Invalid type");
+    }
+  }
+
+  void writePackedVarUInt(int i) {
+    int bits = getBitsNeeded(i.abs());
+    BitBuffer a = BitBuffer();
+    a.writeBits(1, 2); // 1 = packed
+    a.writeBits(bits, 6);
+    a.writeBits(i, bits);
+    BitBuffer b = BitBuffer();
+    b.writeBits(0, 2); // 0 = varint
+    b.writeVarUInt(i);
+    BitBuffer c = BitBuffer();
+    c.writeBits(2, 2); // 2 = raw 32
+    c.writeBits(i, 32);
+    BitBuffer d = BitBuffer();
+    d.writeBits(3, 2); // 3 = raw 64
+    d.writeBits(i, 64);
+    addBits([a, b, c, d]
+        .reduce((a, b) => a.getAvailableBits() < b.getAvailableBits() ? a : b)
+        ._bits);
+  }
+
+  int readPackedVarUInt() {
+    int type = read(2);
+    if (type == 0) {
+      return readVarUInt();
+    } else if (type == 1) {
+      int bits = read(6);
+      int value = read(bits);
+      return value;
+    } else if (type == 2) {
+      int value = read(32);
+      return value;
+    } else if (type == 3) {
+      int value = read(64);
+      return value;
+    }
+    return 0;
+  }
+
+  void addBits(List<bool> bits) {
+    _bits.addAll(bits);
+  }
+
+  void addBit(bool bit) {
+    _bits.add(bit);
+  }
+
+  List<bool> readBits(int count) {
+    var bits = _bits.sublist(0, count);
+    _bits = _bits.sublist(count);
+    return bits;
+  }
+
+  int readInt() => readPackedVarInt();
+  int readUInt() => readPackedVarUInt();
+
+  void writeInt(int i) => writePackedVarInt(i);
+  void writeUInt(int i) => writePackedVarUInt(i);
+
   bool hasAvailableBits(int minimum) => _bits.length >= minimum;
 
   int getAvailableBits() => _bits.length;
@@ -35,6 +196,8 @@ class BitBuffer {
   void writeSign(int i) => _bits.add(i >= 0);
 
   bool readSign() => _bits.removeAt(0);
+
+  int readISign() => _bits.removeAt(0) ? 1 : 0;
 
   void writeVarInt(int i) => (this..writeSign(i)).writeVarUInt(i.abs());
 
@@ -47,13 +210,13 @@ class BitBuffer {
     double d = truncate(dd, maxPrecision);
     int moves = _getDecimalMoves(d, maxPrecision: maxPrecision);
     writeBits(moves, getBitsNeeded(maxPrecision));
-    writeVarInt((d * pow(10, moves)).toInt());
+    writeInt((d * pow(10, moves)).toInt());
   }
 
   double readVarDouble({int maxPrecision = 8}) {
     assert(maxPrecision <= 15, "maxPrecision must be <= 15");
-    int precision = readBits(getBitsNeeded(maxPrecision));
-    return readVarInt().toDouble() / pow(10, precision).toDouble();
+    int precision = read(getBitsNeeded(maxPrecision));
+    return readInt().toDouble() / pow(10, precision).toDouble();
   }
 
   static double truncate(double d, int precision) {
@@ -80,17 +243,15 @@ class BitBuffer {
     return g;
   }
 
-  double readDouble32() =>
-      (ByteData(4)..setInt32(0, readVarInt())).getFloat32(0);
+  double readDouble32() => (ByteData(4)..setInt32(0, readInt())).getFloat32(0);
 
-  double readDouble64() =>
-      (ByteData(8)..setInt64(0, readVarInt())).getFloat64(0);
+  double readDouble64() => (ByteData(8)..setInt64(0, readInt())).getFloat64(0);
 
   void writeDouble32(double d) =>
-      writeVarInt((ByteData(4)..setFloat32(0, d)).getInt32(0));
+      writeInt((ByteData(4)..setFloat32(0, d)).getInt32(0));
 
   void writeDouble64(double d) =>
-      writeVarInt((ByteData(8)..setFloat64(0, d)).getInt64(0));
+      writeInt((ByteData(8)..setFloat64(0, d)).getInt64(0));
 
   void _setBytes(List<int> bytes) {
     _bits = [];
@@ -141,7 +302,7 @@ class BitBuffer {
     int maxBits = readVarUInt();
     List<int> m = [];
     for (int i = 0; i < count; i++) {
-      m.add(readSign() ? readBits(maxBits) : -readBits(maxBits));
+      m.add(readSign() ? read(maxBits) : -read(maxBits));
     }
     return m;
   }
@@ -158,13 +319,13 @@ class BitBuffer {
     int maxBits = readVarUInt();
     List<int> m = [];
     for (int i = 0; i < count; i++) {
-      m.add(readBits(maxBits));
+      m.add(read(maxBits));
     }
     return m;
   }
 
   int readVarUInt() {
-    int indicator = readBits(2);
+    int indicator = read(2);
     int bits = 0;
     if (indicator == 0) {
       bits = 8;
@@ -175,7 +336,7 @@ class BitBuffer {
     } else if (indicator == 3) {
       bits = 64;
     }
-    return readBits(bits);
+    return read(bits);
   }
 
   void writeVarUInt(int value) {
@@ -202,7 +363,7 @@ class BitBuffer {
     writeBits(value, bits);
   }
 
-  int readBits(int bits) {
+  int read(int bits) {
     assert(bits >= 1, "Bits must be 1 or more");
     if (!hasAvailableBits(bits)) {
       throw Exception(
