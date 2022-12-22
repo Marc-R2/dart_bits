@@ -6,53 +6,31 @@ import 'dart:typed_data';
 
 import 'package:threshold/threshold.dart';
 
-void main() {
-  List<double> m = [
-    1.5555555555,
-    2.2345345345,
-    3.777456456,
-    4.4445656456456,
-    5.223434234234,
-    6.4,
-    7.3,
-    8.2,
-    9.1
-  ];
-
-  // Max precision = 4
-  // 2.234
-  // 2234 x10^3
-
-  // 2234
-
-  // 1011100100010111010
-  // 000110101110010101011010010110101100011010111111
-
-  print(m);
-  BitBuffer buffer = BitBuffer();
-  buffer.writeVarDoubles(m, maxPrecision: 1);
-  print(buffer.toString());
-
-  buffer = BitBuffer();
-  buffer.writeVarDoubles(m, maxPrecision: 4);
-  print(buffer.toString());
-
-  buffer = BitBuffer();
-  buffer.writeVarDoubles(m, maxPrecision: 8);
-  print(buffer.toString());
-
-  buffer = BitBuffer();
-  buffer.writeVarDoubles(m, maxPrecision: 16);
-  print(buffer.toString());
-}
-
 class BitBuffer {
   List<bool> _bits = [];
 
   BitBuffer();
 
-  factory BitBuffer.fromString(String compressed) =>
-      BitBuffer()..load(base64Decode(decompress(compressed)));
+  factory BitBuffer.fromBytes(List<int> bytes) => BitBuffer().._setBytes(bytes);
+
+  factory BitBuffer.fromByteBuilder(BytesBuilder builder) =>
+      BitBuffer.fromBytes(builder.toBytes());
+
+  factory BitBuffer.fromByteBuffer(ByteBuffer buffer) =>
+      BitBuffer.fromBytes(buffer.asUint8List());
+
+  factory BitBuffer.fromByteData(ByteData data) =>
+      BitBuffer.fromByteBuffer(data.buffer);
+
+  factory BitBuffer.fromBase64Compressed(String compressed) =>
+      BitBuffer.fromBytes(base64Decode(decompress(compressed)));
+
+  factory BitBuffer.fromBase64(String compressed) =>
+      BitBuffer.fromBytes(base64Decode(compressed));
+
+  bool hasAvailableBits(int minimum) => _bits.length >= minimum;
+
+  int getAvailableBits() => _bits.length;
 
   void writeSign(int i) => _bits.add(i >= 0);
 
@@ -62,20 +40,29 @@ class BitBuffer {
 
   int readVarInt() => readSign() ? readVarUInt() : -readVarUInt();
 
-  String toString() => compress(base64Encode(toBytes().toBytes()));
+  String toString() => toBase64Compressed();
+
+  void writeVarDouble(double dd, {int maxPrecision = 8}) {
+    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
+    double d = truncate(dd, maxPrecision);
+    int moves = _getDecimalMoves(d, maxPrecision: maxPrecision);
+    writeBits(moves, getBitsNeeded(maxPrecision));
+    writeVarInt((d * pow(10, moves)).toInt());
+  }
 
   double readVarDouble({int maxPrecision = 8}) {
+    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
     int precision = readBits(getBitsNeeded(maxPrecision));
     return readVarInt().toDouble() / pow(10, precision).toDouble();
   }
 
-  void writeVarDouble(double d, {int maxPrecision = 8}) {
-    int moves = _getDecimalMoves(d, maxPrecision: maxPrecision);
-    writeBits(moves, getBitsNeeded(getBitsNeeded(maxPrecision)));
-    writeVarInt((d * pow(10, moves)).toInt());
+  static double truncate(double d, int precision) {
+    int fac = pow(10, precision).toInt();
+    return (d * fac).toInt() / fac;
   }
 
   int _getDecimalMoves(double d, {int maxPrecision = 8}) {
+    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
     if (d == d.toInt()) {
       return 0;
     }
@@ -86,7 +73,7 @@ class BitBuffer {
       g++;
 
       if (g > maxPrecision) {
-        return 8;
+        return maxPrecision;
       }
     }
 
@@ -105,7 +92,7 @@ class BitBuffer {
   void writeDouble64(double d) =>
       writeVarInt((ByteData(8)..setFloat64(0, d)).getInt64(0));
 
-  void load(List<int> bytes) {
+  void _setBytes(List<int> bytes) {
     _bits = [];
     for (int i = 0; i < bytes.length; i++) {
       for (int j = 0; j < 8; j++) {
@@ -114,19 +101,23 @@ class BitBuffer {
     }
   }
 
-  bool _getBit(int value, int bit) => (value & (1 << bit)) != 0;
+  static bool getBit(int value, int bit) => (value & (1 << bit)) != 0;
 
-  int _setBit(int value, int bit, bool on) =>
+  static int setBit(int value, int bit, bool on) =>
       on ? value | (1 << bit) : value & ~(1 << bit);
 
-  void writeVarDoubles(List<double> m, {int maxPrecision = 8}) {
+  void writeVarDoubles(Iterable<double> m, {int maxPrecision = 8}) {
+    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
     writeVarUInt(m.length);
-    for (int i = 0; i < m.length; i++) {
-      writeVarDouble(m[i], maxPrecision: maxPrecision);
-    }
+    m.forEach((element) => writeVarDouble(element, maxPrecision: maxPrecision));
   }
 
+  String toBase64Compressed() => compress(toBase64());
+
+  String toBase64() => base64Encode(toBytes());
+
   List<double> readVarDoubles({int maxPrecision = 8}) {
+    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
     List<double> m = [];
     int length = readVarUInt();
     for (int i = 0; i < length; i++) {
@@ -135,14 +126,14 @@ class BitBuffer {
     return m;
   }
 
-  void writeVarInts(List<int> m) {
-    int maxBits = m.map((i) => getBitsNeeded(i)).reduce(max);
+  void writeVarInts(Iterable<int> m) {
+    int maxBits = m.map((i) => getBitsNeeded(i.abs())).reduce(max);
     writeVarUInt(m.length);
     writeVarUInt(maxBits);
-    for (int i = 0; i < m.length; i++) {
-      writeSign(m[i]);
-      writeBits(m[i], maxBits);
-    }
+    m.forEach((i) {
+      writeSign(i);
+      writeBits(i.abs(), maxBits);
+    });
   }
 
   List<int> readVarInts() {
@@ -155,13 +146,11 @@ class BitBuffer {
     return m;
   }
 
-  void writeVarUInts(List<int> m) {
+  void writeVarUInts(Iterable<int> m) {
     int maxBits = m.map((i) => getBitsNeeded(i)).reduce(max);
     writeVarUInt(m.length);
     writeVarUInt(maxBits);
-    for (int i = 0; i < m.length; i++) {
-      writeBits(m[i], maxBits);
-    }
+    m.forEach((element) => writeBits(element, maxBits));
   }
 
   List<int> readVarUInts() {
@@ -190,6 +179,8 @@ class BitBuffer {
   }
 
   void writeVarUInt(int value) {
+    assert(value >= 0, "Value must be positive");
+
     int bits = getBitsNeeded(value);
     int indicator = 0;
 
@@ -212,15 +203,22 @@ class BitBuffer {
   }
 
   int readBits(int bits) {
+    assert(bits >= 1, "Bits must be 1 or more");
+    if (!hasAvailableBits(bits)) {
+      throw Exception(
+          "Not enough bits available! Trying to read $bits, but only ${_bits.length} available!");
+    }
+
     int value = 0;
     for (int i = 0; i < bits; i++) {
-      value = _setBit(value, i, _bits[i]);
+      value = setBit(value, i, _bits[i]);
     }
     _bits = _bits.sublist(bits);
     return value;
   }
 
-  int getBitsNeeded(int value) {
+  static int getBitsNeeded(int value) {
+    assert(value >= 0, "Value must be positive");
     int bits = 0;
     while (value > 0) {
       value >>= 1;
@@ -230,17 +228,34 @@ class BitBuffer {
   }
 
   void writeBits(int byte, int bits) {
+    assert(byte >= 0, "byte must be positive");
+    assert(bits >= 0, "Bit size must be positive");
     for (int i = 0; i < bits; i++) {
-      _bits.add(_getBit(byte, i));
+      _bits.add(getBit(byte, i));
     }
   }
 
-  BytesBuilder toBytes() {
+  ByteBuffer toByteBuffer() => toBytes().buffer;
+
+  ByteData toByteData() {
+    Uint8List b = toBytes();
+
+    ByteData data = ByteData(b.length);
+    for (int i = 0; i < b.length; i++) {
+      data.setInt8(i, b[i]);
+    }
+
+    return data;
+  }
+
+  Uint8List toBytes() => toByteBuilder().toBytes();
+
+  BytesBuilder toByteBuilder() {
     BytesBuilder builder = BytesBuilder();
     int byte = 0;
     int bits = 0;
     for (bool bit in _bits) {
-      byte = _setBit(byte, bits, bit);
+      byte = setBit(byte, bits, bit);
       bits++;
       if (bits == 8) {
         builder.addByte(byte);
