@@ -4,22 +4,53 @@ import 'package:bits/bits.dart';
 import 'package:test/test.dart';
 
 void main() {
-  for (double iff = 1; iff < 123456; iff *= 2.3456789123456789) {
-    for (int t = 1; t < 9; t += 3) {
-      final double i = iff - (123456 / 2);
-      final double it = BitBuffer.truncate(i, t);
-      test('Write VarDouble ${i} with $t precision', () {
-        BitBuffer buf = BitBuffer();
-        buf.writeDouble(i, maxPrecision: t);
-        double out = buf.readDouble(maxPrecision: t);
-        expect(out, equals(it),
-            reason:
-                'Reading VarDouble ${it}, got ${out} instead (truncated to ${t} digits)');
-        expect(buf.getAvailableBits(), equals(0),
-            reason:
-                'Reading VarDouble had leftover bits from write! (truncated to ${t} digits)');
-      });
-    }
+  for (int i = 1; i < 512; i++) {
+    test('Write UInt ${i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeInt(i, signed: false);
+      int out = buf.readInt(signed: false);
+      expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading UInt had leftover bits from write!');
+    });
+
+    test('Write Int ${i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeInt(i);
+      int out = buf.readInt();
+      expect(out, equals(i), reason: 'Reading Int ${i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading Int had leftover bits from write!');
+    });
+
+    test('Write VarUInt ${i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeVarInt(i, signed: false);
+      int out = buf.readVarInt(signed: false);
+      expect(out, equals(i),
+          reason: 'Reading VarUInt ${i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading VarUInt had leftover bits from write!');
+    });
+
+    test('Write VarInt ${i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeVarInt(i);
+      int out = buf.readVarInt();
+      expect(out, equals(i), reason: 'Reading VarInt ${i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading VarInt had leftover bits from write!');
+    });
+
+    test('Write VarInt ${-i}', () {
+      BitBuffer buf = BitBuffer();
+      buf.writeVarInt(-i);
+      int out = buf.readVarInt();
+      expect(out, equals(-i),
+          reason: 'Reading VarInt ${-i}, got ${out} instead');
+      expect(buf.getAvailableBits(), equals(0),
+          reason: 'Reading VarInt had leftover bits from write!');
+    });
   }
 
   for (int i = 1; i < 123456; i *= 3) {
@@ -70,24 +101,6 @@ void main() {
           reason: 'Reading VarInt had leftover bits from write!');
     });
   }
-
-  test('VarUIntLists', () {
-    BitBuffer buf = BitBuffer();
-    List<int> ints = randomInts(4).map((e) => e.abs()).toList();
-    buf.writeVarInts(ints, signed: false);
-    List<int> out = buf.readVarInts(signed: false);
-    expect(out, equals(ints),
-        reason: 'Reading VarUInts ${ints}, got ${out} instead');
-  });
-
-  test('VarIntLists', () {
-    BitBuffer buf = BitBuffer();
-    List<int> ints = randomInts(4).toList();
-    buf.writeVarInts(ints);
-    List<int> out = buf.readVarInts();
-    expect(out, equals(ints),
-        reason: 'Reading VarInts ${ints}, got ${out} instead');
-  });
 
   test('BitBuffer to/from base64', () {
     BitBuffer buf = newRandomBuffer();
@@ -140,6 +153,91 @@ void main() {
             .asUint8List(),
         equals(buf.toByteData().buffer.asUint8List()),
         reason: 'BitBuffer to/from byteData failed');
+  });
+
+  test('Basic String', () {
+    BitBuffer buf = BitBuffer();
+    String s = 'Hello World!';
+    buf.writeString(s);
+    expect(s, equals(BitBuffer.fromBytes(buf.toBytes()).readString()),
+        reason: 'BitBuffer String failed');
+  });
+
+  test('Complex String', () {
+    String x = "abcdefghijklmnopqrstuvwxyz";
+    String s =
+        List.generate(1024, (index) => x[Random().nextInt(x.length)]).join();
+    BitBuffer buf = BitBuffer();
+    buf.writeString(s);
+    expect(s, equals(BitBuffer.fromBytes(buf.toBytes()).readString()),
+        reason: 'BitBuffer String failed');
+  });
+
+  test('Hypercomplex String', () {
+    String x =
+        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()_+-=[]{};':\",./<>?`~";
+    String s =
+        List.generate(2048, (index) => x[Random().nextInt(x.length)]).join();
+    BitBuffer buf = BitBuffer();
+    buf.writeString(s);
+    expect(s, equals(BitBuffer.fromBytes(buf.toBytes()).readString()),
+        reason: 'BitBuffer String failed');
+  });
+
+  test('Palette Data 2x', () {
+    PaletteData<int> p = PaletteData<int>(
+      writer: (buf, value) => buf.writeInt(value),
+      reader: (buf) => buf.readInt(),
+    );
+
+    p.write(4);
+    p.write(1);
+    p.write(4);
+    p.write(1);
+    p.write(1);
+    p.write(4);
+    p.write(1);
+    p.write(4);
+    p.write(4);
+    p.write(1);
+
+    PaletteData<int> pp = PaletteData<int>.fromBitBuffer(
+      buf: p.toBitBuffer(),
+      writer: (buf, value) => buf.writeInt(value),
+      reader: (buf) => buf.readInt(),
+    );
+
+    expect(pp.toBitBuffer().toBytes(), equals(p.toBitBuffer().toBytes()),
+        reason: 'PaletteData to/from BitBuffer failed');
+    expect(pp.getAllData(), equals(p.getAllData()),
+        reason: "Palette Data failed not equal");
+  });
+
+  test('Palette Data', () {
+    PaletteData<int> p = PaletteData<int>(
+      writer: (buf, value) => buf.writeInt(value),
+      reader: (buf) => buf.readInt(),
+    );
+
+    p.write(4);
+    p.write(47);
+    p.write(412123);
+    p.write(4);
+    p.write(7567);
+    p.write(4);
+    p.write(56756);
+    p.write(-43546);
+
+    PaletteData<int> pp = PaletteData<int>.fromBitBuffer(
+      buf: p.toBitBuffer(),
+      writer: (buf, value) => buf.writeInt(value),
+      reader: (buf) => buf.readInt(),
+    );
+
+    expect(pp.toBitBuffer().toBytes(), equals(p.toBitBuffer().toBytes()),
+        reason: 'PaletteData to/from BitBuffer failed');
+    expect(pp.getAllData(), equals(p.getAllData()),
+        reason: "Palette Data failed not equal");
   });
 }
 

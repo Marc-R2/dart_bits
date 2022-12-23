@@ -6,95 +6,220 @@ import 'dart:typed_data';
 
 import 'package:threshold/threshold.dart';
 
-void main() {
-  BitBuffer buf = BitBuffer();
-  List<int> set = [3, 8];
-
-  buf.writeVarInt(7, steps: set, signed: false);
-  buf.writeVarInt(3, steps: set, signed: false);
-  buf.writeVarInt(211, steps: set, signed: false);
-
-  print(buf.getAvailableBits());
-  print(buf.toString());
-}
-
 const List<int> _bits4x8_64 = [8, 16, 32, 64];
 const List<int> _bits4xLIST = [2, 7, 10, 64];
 const List<int> _bits8xLOW = [2, 5, 8, 9, 10, 13, 24, 64];
 const List<int> _bits4xLOW = [3, 8, 13, 64];
+const List<int> _bits2xCHAR = [6, 16];
+const List<int> _bits2xLOWx6 = [2, 6];
 const List<int> _bits2x32_64 = [32, 64];
 const List<int> _bits2x16_32 = [16, 32];
 const List<int> _defaultSteps = _bits4x8_64;
-
+const int initialPaletteBits = 3;
+const int linearBitsLimit = 5;
 const List<List<int>> _defaultPackedSet = [
   _bits4x8_64,
   _bits4xLOW,
   _bits8xLOW,
 ];
-
 const List<List<int>> _listPackedSet = [
   _bits4x8_64,
   _bits4xLIST,
   _bits8xLOW,
 ];
 
-class BitEvent<T> {
-  final BitValueReader<T> reader;
-  final BitValueWriter<T> writer;
+typedef void BitWriter<T>(BitBuffer buf, T value);
 
-  BitEvent({required this.reader, required this.writer});
-}
+typedef T BitReader<T>(BitBuffer buf);
 
-typedef BitValueReader<T> = T Function();
-typedef BitValueWriter<T> = void Function(T value);
+class PaletteData<T> {
+  final BitWriter<T> writer;
+  final BitReader<T> reader;
+  Palette<T> _palette = LinearPalette<T>();
+  List<int> _out = [];
 
-class BitInteger extends BitEvent<int> {
-  BitInteger(
-      {required BitValueReader<int> reader,
-      required BitValueWriter<int> writer})
-      : super(reader: reader, writer: writer);
-}
+  List<T> getAllData() =>
+      _out.map((e) => _palette.get(e)).toList(growable: false);
 
-class BitDouble extends BitEvent<double> {
-  BitDouble(
-      {required BitValueReader<double> reader,
-      required BitValueWriter<double> writer})
-      : super(reader: reader, writer: writer);
-}
+  List<int> getAllEntries() => _out.toList(growable: false);
 
-class BitPlan {
-  List<BitEvent> events = [];
+  PaletteData({required this.writer, required this.reader});
 
-  BitPlan();
+  int getPaletteSize() => _palette.size();
 
-  BitPlan write(BitEvent<dynamic> k) {
-    events.add(k);
-    return this;
+  int getEntrySize() => _out.length;
+
+  int getEntryBits() => BitBuffer.getBitsNeeded(getPaletteSize() - 1);
+
+  void write(T t) {
+    int id = !_palette.contains(t) ? _grow(t) : _palette.idOf(t);
+
+    if (!_palette.contains(t)) {
+      _grow(t);
+    }
+
+    _out.add(id);
   }
 
-  Iterable<int> pullInts() sync* {
-    for (var e in events) {
-      if (e is BitInteger) {
-        yield e.reader();
-      }
+  int _grow(T t) {
+    if (_palette is LinearPalette<T> &&
+        BitBuffer.getBitsNeeded(_palette.size() + 1) > linearBitsLimit) {
+      _palette = HashPalette<T>()..from(_palette);
     }
+
+    return _palette.add(t);
   }
 
-  Iterable<double> pullDoubles() sync* {
-    for (var e in events) {
-      if (e is BitDouble) {
-        yield e.reader();
-      }
+  factory PaletteData.fromBitBuffer(
+      {required BitWriter<T> writer,
+      required BitReader<T> reader,
+      required BitBuffer buf}) {
+    PaletteData<T> data = PaletteData<T>(writer: writer, reader: reader);
+    int paletteSize = buf.readInt(signed: false);
+
+    for (int i = 0; i < paletteSize; i++) {
+      data._palette.add(reader(buf));
     }
+
+    int entrySize = buf.readInt(signed: false);
+    for (int i = 0; i < entrySize; i++) {
+      data._out.add(buf.read(data.getEntryBits()));
+    }
+
+    return data;
+  }
+
+  BitBuffer toBitBuffer() {
+    BitBuffer buf = BitBuffer();
+    buf.writeInt(_palette.size(), signed: false); // TODO: Write Palette Size
+
+    for (int i = 0; i < _palette.size(); i++) {
+      writer(buf, _palette.get(i)); // TODO: Write Palette values
+    }
+
+    buf.writeInt(_out.length, signed: false); // TODO: Write Entry Size
+    for (int i in _out) {
+      buf.writeBits(i, getEntryBits()); // Write Palette Entry Values
+    }
+
+    return buf;
+  }
+}
+
+abstract class Palette<T> {
+  int idOf(T value);
+  T get(int id);
+  int size();
+  bool contains(T value);
+  int add(T value);
+  void iterate(void Function(T value, int id) biConsumer);
+  void from(Palette<T> other) => other.iterate((T value, int id) => add(value));
+}
+
+class LinearPalette<T> extends Palette<T> {
+  final List<T> _list = [];
+
+  @override
+  int idOf(T value) => _list.indexOf(value);
+
+  @override
+  T get(int id) => _list[id];
+
+  @override
+  int size() => _list.length;
+
+  @override
+  bool contains(T value) => _list.contains(value);
+
+  @override
+  int add(T value) {
+    if (!contains(value)) {
+      int s = size();
+      _list.add(value);
+      return s;
+    }
+
+    return idOf(value);
+  }
+
+  @override
+  void iterate(void Function(T value, int id) biConsumer) {
+    for (int i = 0; i < _list.length; i++) {
+      biConsumer(_list[i], i);
+    }
+  }
+}
+
+class HashPalette<T> extends Palette<T> {
+  final Map<T, int> _palette = {};
+  final Map<int, T> _lookup = {};
+  int _size = 0;
+
+  @override
+  int idOf(T value) => _palette[value]!;
+
+  @override
+  T get(int id) => _lookup[id]!;
+
+  @override
+  int size() => _size;
+
+  @override
+  bool contains(T value) => _palette.containsKey(value);
+
+  @override
+  int add(T value) {
+    if (!contains(value)) {
+      int id = _size++;
+      _palette[value] = id;
+      _lookup[id] = value;
+      return id;
+    }
+
+    return idOf(value);
+  }
+
+  @override
+  void iterate(void Function(T value, int id) biConsumer) {
+    for (int i = 0; i < _size; i++) {
+      biConsumer(_lookup[i]!, i);
+    }
+  }
+}
+
+class BitLogger {
+  Map<String, String> values = {};
+  Map<String, int> sections = {};
+
+  void log(String name, int postBitsWritten, dynamic value) {
+    values["$name$postBitsWritten"] = "$value";
+    sections["$name$postBitsWritten"] = postBitsWritten;
+  }
+
+  void printExplainedBinary(BitBuffer buffer) {
+    String bu = "";
+    String bits = buffer.toLiteralBinary();
+    List<int> sects = sections.values.toList();
+    sects.sort();
+    int prev = 0;
+    for (int i in sects) {
+      String key =
+          sections.keys.firstWhere((element) => sections[element] == i);
+      bu += "${bits.substring(prev, i)} ";
+      print("[${prev + 1}-$i = ${i - prev}]: ${key} (${values[key]})");
+      prev = i;
+    }
+    print(bu);
   }
 }
 
 class BitBuffer {
+  bool debug = false;
   List<bool> _bits = [];
 
   BitBuffer();
 
-  factory BitBuffer.fromBytes(List<int> bytes) => BitBuffer().._setBytes(bytes);
+  factory BitBuffer.fromBytes(Uint8List bytes) => BitBuffer().._setBytes(bytes);
 
   factory BitBuffer.fromByteBuilder(BytesBuilder builder) =>
       BitBuffer.fromBytes(builder.toBytes());
@@ -110,6 +235,64 @@ class BitBuffer {
 
   factory BitBuffer.fromBase64(String compressed) =>
       BitBuffer.fromBytes(base64Decode(compressed));
+
+  String toLiteralBinary() => _bits.map((e) => e ? '1' : '0').join();
+
+  void writeByteArray(Uint8List list, {bool writeSize = true}) {
+    if (writeSize) {
+      writeInt(list.lengthInBytes, signed: false);
+    }
+
+    for (int i = 0; i < list.lengthInBytes; i++) {
+      writeInt(list[i], signed: false);
+    }
+
+    print("Wrorte " + list.lengthInBytes.toString() + " bytes");
+  }
+
+  Uint8List readByteArray([int? bytes]) {
+    bytes ??= readInt(signed: false);
+    Uint8List list = Uint8List(bytes);
+    for (int i = 0; i < bytes; i++) {
+      list[i] = read(8);
+    }
+    return list;
+  }
+
+  String readString() => readBit()
+      ? String.fromCharCodes(PaletteData<int>.fromBitBuffer(
+          buf: this,
+          writer: (buf, value) =>
+              buf.writeVarInt(value, signed: false, steps: _bits2xCHAR),
+          reader: (buf) =>
+              buf.readVarInt(signed: false, steps: _bits2xCHAR)).getAllData())
+      : String.fromCharCodes(List.generate(readInt(signed: false),
+          (index) => readVarInt(signed: false, steps: _bits2xCHAR)));
+
+  void writeString(String text) {
+    BitBuffer buf = BitBuffer();
+    buf.writeInt(text.length, signed: false);
+    text.codeUnits.forEach((element) =>
+        buf.writeVarInt(element, signed: false, steps: _bits2xCHAR));
+
+    PaletteData<int> stringWriter = PaletteData<int>(
+        writer: (BitBuffer buf, int value) =>
+            buf.writeVarInt(value, signed: false, steps: _bits2xCHAR),
+        reader: (BitBuffer buf) =>
+            buf.readVarInt(signed: false, steps: _bits2xCHAR));
+    for (int i = 0; i < text.length; i++) {
+      stringWriter.write(text.codeUnitAt(i));
+    }
+    BitBuffer buf2 = stringWriter.toBitBuffer();
+
+    if (buf2.getAvailableBits() < buf.getAvailableBits()) {
+      writeBits(1, 1);
+      addBits(buf2._bits);
+    } else {
+      writeBits(0, 1);
+      addBits(buf._bits);
+    }
+  }
 
   void writePackedVarInt(int i,
       {bool signed = true, List<List<int>> stepSet = _defaultPackedSet}) {
@@ -169,6 +352,8 @@ class BitBuffer {
     _bits.add(bit);
   }
 
+  bool readBit() => _bits.removeAt(0);
+
   List<bool> readBits(int count) {
     var bits = _bits.sublist(0, count);
     _bits = _bits.sublist(count);
@@ -193,52 +378,14 @@ class BitBuffer {
 
   String toString() => toBase64Compressed();
 
-  void writeDouble(double dd,
-      {int maxPrecision = 8, List<int> steps = _defaultSteps}) {
-    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
-    double d = truncate(dd, maxPrecision);
-    int moves = _getDecimalMoves(d, maxPrecision: maxPrecision);
-    writeBits(moves, getBitsNeeded(maxPrecision));
-    writeVarInt((d * pow(10, moves)).toInt(), steps: steps);
-  }
-
-  double readDouble({int maxPrecision = 8, List<int> steps = _defaultSteps}) {
-    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
-    int precision = read(getBitsNeeded(maxPrecision));
-    return readVarInt(steps: steps).toDouble() / pow(10, precision).toDouble();
-  }
-
   static double truncate(double d, int precision) {
     int fac = pow(10, precision).toInt();
     return (d * fac).toInt() / fac;
   }
 
-  int _getDecimalMoves(double d, {int maxPrecision = 8}) {
-    assert(maxPrecision <= 15, "maxPrecision must be <= 15");
-    if (d == d.toInt()) {
-      return 0;
-    }
-
-    int g = 1;
-
-    while (pow(10, g) * d != (pow(10, g) * d).toInt()) {
-      g++;
-
-      if (g > maxPrecision) {
-        return maxPrecision;
-      }
-    }
-
-    return g;
-  }
-
-  void _setBytes(List<int> bytes) {
+  void _setBytes(Uint8List bytes) {
     _bits = [];
-    for (int i = 0; i < bytes.length; i++) {
-      for (int j = 0; j < 8; j++) {
-        _bits.add((bytes[i] & (1 << j)) != 0);
-      }
-    }
+    writeByteArray(bytes);
   }
 
   static double lerp(double a, double b, double t) => a + (b - a) * t;
@@ -283,32 +430,6 @@ class BitBuffer {
   String toBase64Compressed() => compress(toBase64());
 
   String toBase64() => base64Encode(toBytes());
-
-  void writeVarInts(Iterable<int> m, {bool signed = true}) {
-    int maxBits = m.map((i) => getBitsNeeded(i.abs())).reduce(max);
-    writeInt(m.length, signed: false, stepSet: _listPackedSet);
-    writeInt(maxBits, signed: false);
-    m.forEach((i) {
-      if (signed) {
-        writeSign(i);
-      }
-      writeBits(i.abs(), maxBits);
-    });
-  }
-
-  List<int> readVarInts({bool signed = true}) {
-    int count = readInt(signed: false, stepSet: _listPackedSet);
-    int maxBits = readInt(signed: false);
-    List<int> m = [];
-    for (int i = 0; i < count; i++) {
-      m.add(signed
-          ? readSign()
-              ? read(maxBits)
-              : -read(maxBits)
-          : read(maxBits));
-    }
-    return m;
-  }
 
   void writeVarInt(int value,
       {List<int> steps = _defaultSteps, bool signed = true}) {
@@ -360,7 +481,7 @@ class BitBuffer {
       value >>= 1;
       bits++;
     }
-    return bits;
+    return max(1, bits);
   }
 
   void writeBits(int byte, int bits) {
