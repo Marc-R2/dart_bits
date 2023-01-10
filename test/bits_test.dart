@@ -1,9 +1,27 @@
+import 'dart:convert';
 import 'dart:math';
 
 import 'package:bits/bits.dart';
+import 'package:crypto/crypto.dart';
 import 'package:test/test.dart';
 
 void main() {
+  // Map<String, dynamic> j = {};
+  //
+  // for (int i = 0; i < 20; i++) {
+  //   j["${i}"] = i;
+  // }
+  //
+  // print(jsonEncode(j));
+  // print(jsonEncode(compressJson(j)));
+  // print(jsonEncode(decompressJson(compressJson(j))));
+  //
+  // print(
+  //     "Input hash  is ${sha256.convert(utf8.encode(jsonEncode(j))).toString()}");
+  // print(
+  //     "Output hash is ${sha256.convert(utf8.encode(jsonEncode(decompressJson(compressJson(j))))).toString()}");
+  // return;
+
   for (int i = 1; i < 512; i++) {
     test('Write UInt ${i}', () {
       BitBuffer buf = BitBuffer();

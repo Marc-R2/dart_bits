@@ -4,13 +4,13 @@ import 'dart:convert';
 import 'dart:math';
 import 'dart:typed_data';
 
+import 'package:jpatch/jpatch.dart';
 import 'package:threshold/threshold.dart';
 
 const List<int> _bits4x8_64 = [8, 16, 32, 64];
 const List<int> _bits4xLIST = [2, 7, 10, 64];
 const List<int> _bits8xLOW = [2, 5, 8, 9, 10, 13, 24, 64];
 const List<int> _bits4xLOW = [3, 8, 13, 64];
-const List<int> _bits2xCHAR = [6, 16];
 const List<int> _bits2xLOWx6 = [2, 6];
 const List<int> _bits2x32_64 = [32, 64];
 const List<int> _bits2x16_32 = [16, 32];
@@ -31,6 +31,91 @@ const List<List<int>> _listPackedSet = [
 typedef void BitWriter<T>(BitBuffer buf, T value);
 
 typedef T BitReader<T>(BitBuffer buf);
+
+Map<String, dynamic> decompressJson(Map<String, dynamic> d) {
+  if (d.containsKey("K0")) {
+    List<String> f = [];
+    for (int i = 0; i < d.length; i++) {
+      if (d.containsKey("K$i")) {
+        f.add(d["K$i"]);
+      }
+    }
+
+    BitBuffer buf = BitBuffer.fromBase64Compressed(f.join());
+
+    int size = buf.readInt(signed: false);
+    List<dynamic> values = [];
+    int t = 0;
+    for (int i = 0; i < size; i++) {
+      t = buf.read(2);
+      if (t == 0) {
+        values.add(buf.readInt(signed: true));
+      } else if (t == 1) {
+        values.add(buf.readByteArray(8).buffer.asByteData().getFloat64(0));
+      } else if (t == 2) {
+        values.add(buf.readBit());
+      } else if (t == 3) {
+        values.add(buf.readString());
+      }
+
+      print("Read ${values.length} $values");
+    }
+    List<String> k = buf.readString().split(",");
+    Map<String, dynamic> flat = {};
+    for (int i = 0; i < k.length; i++) {
+      flat[k[i]] = values[i];
+    }
+    return flat.expanded();
+  }
+
+  return d;
+}
+
+Map<String, dynamic> compressJson(Map<String, dynamic> d,
+    {int chunkSize = 8192}) {
+  Map<String, dynamic> flat = d.flattened();
+  BitBuffer buf = BitBuffer();
+  List<String> k = <String>[];
+  buf.writeInt(k.length, signed: false);
+
+  for (String i in flat.keys) {
+    k.add(i);
+    dynamic value = flat[i];
+    print("Write key $i $value type");
+    if (value is int) {
+      buf.writeBits(0, 2);
+      buf.writeInt(value, signed: true);
+    } else if (value is double) {
+      buf.writeBits(1, 2);
+      buf.writeByteArray(
+          (ByteData(8)..setFloat64(0, value)).buffer.asUint8List(),
+          writeSize: false);
+    } else if (value is bool) {
+      buf.writeBits(2, 2);
+      buf.addBit(value);
+    } else if (value is String) {
+      buf.writeBits(3, 2);
+      buf.writeString(value);
+    }
+  }
+
+  buf.writeString(k.join(","));
+  String s = buf.toBase64Compressed();
+  Map<String, dynamic> data = {};
+
+  for (int i = 0; i < s.length; i += chunkSize) {
+    data["K${i ~/ chunkSize}"] = s.substring(i, min(i + chunkSize, s.length));
+  }
+
+  String a = jsonEncode(data);
+  String b = jsonEncode(d);
+
+  if (a.length < b.length) {
+    return data;
+  } else {
+    return d;
+  }
+}
 
 class PaletteData<T> {
   final BitWriter<T> writer;
@@ -261,25 +346,25 @@ class BitBuffer {
 
   String readString() => readBit()
       ? String.fromCharCodes(PaletteData<int>.fromBitBuffer(
-          buf: this,
-          writer: (buf, value) =>
-              buf.writeVarInt(value, signed: false, steps: _bits2xCHAR),
-          reader: (buf) =>
-              buf.readVarInt(signed: false, steps: _bits2xCHAR)).getAllData())
+              buf: this,
+              writer: (buf, value) =>
+                  buf.writeVarInt(value, signed: false, steps: _bits4xLOW),
+              reader: (buf) => buf.readVarInt(signed: false, steps: _bits4xLOW))
+          .getAllData())
       : String.fromCharCodes(List.generate(readInt(signed: false),
-          (index) => readVarInt(signed: false, steps: _bits2xCHAR)));
+          (index) => readVarInt(signed: false, steps: _bits4xLOW)));
 
   void writeString(String text) {
     BitBuffer buf = BitBuffer();
     buf.writeInt(text.length, signed: false);
     text.codeUnits.forEach((element) =>
-        buf.writeVarInt(element, signed: false, steps: _bits2xCHAR));
+        buf.writeVarInt(element, signed: false, steps: _bits4xLOW));
 
     PaletteData<int> stringWriter = PaletteData<int>(
         writer: (BitBuffer buf, int value) =>
-            buf.writeVarInt(value, signed: false, steps: _bits2xCHAR),
+            buf.writeVarInt(value, signed: false, steps: _bits4xLOW),
         reader: (BitBuffer buf) =>
-            buf.readVarInt(signed: false, steps: _bits2xCHAR));
+            buf.readVarInt(signed: false, steps: _bits4xLOW));
     for (int i = 0; i < text.length; i++) {
       stringWriter.write(text.codeUnitAt(i));
     }
@@ -425,7 +510,7 @@ class BitBuffer {
   static bool getBit(int value, int bit) => (value & (1 << bit)) != 0;
 
   static int setBit(int value, int bit, bool on) =>
-      on ? value | (1 << bit) : value & ~(1 << bit);
+      on ? (value | (1 << bit)) : (value & ~(1 << bit));
 
   String toBase64Compressed() => compress(toBase64());
 
