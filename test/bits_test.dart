@@ -1,246 +1,148 @@
-import 'dart:convert';
 import 'dart:math';
 
 import 'package:bits/bits.dart';
-import 'package:crypto/crypto.dart';
 import 'package:test/test.dart';
 
 void main() {
-  for (int i = 1; i < 512; i++) {
-    test('Write UInt ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeInt(i, signed: false);
-      int out = buf.readInt(signed: false);
-      expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading UInt had leftover bits from write!');
-    });
+  List<int> testInts = [
+    0,
+    1,
+    -1,
+    3854,
+    -3346,
+    1234567890,
+    -1234567890,
+    2147483647,
+    -2147483748,
+    4294967295,
+    -4294967295,
+    9223372036854775807,
+    -922337203685477580
+  ];
+  List<double> testDoubles = [
+    0,
+    1,
+    -1,
+    0.1,
+    3.5584,
+    2.345666,
+    2838455.12,
+    29345588585.1118,
+    -28388383838383.7771
+  ];
 
-    test('Write Int ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeInt(i);
-      int out = buf.readInt();
-      expect(out, equals(i), reason: 'Reading Int ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading Int had leftover bits from write!');
-    });
+  test('Basic Copying & Loading & Exporting', () {
+    int v = -23495995555553;
+    BitBuffer buf = BitBuffer();
+    buf.writer().writeInt(v);
+    buf.writer().writeInt(-v * 33);
+    buf.writer().writeInt(16);
+    BitBuffer buf2 = BitBuffer.fromBB(buf);
+    expect(buf2.getLongs(), equals(buf.getLongs()));
+  });
 
-    test('Write VarUInt ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeVarInt(i, signed: false);
-      int out = buf.readVarInt(signed: false);
-      expect(out, equals(i),
-          reason: 'Reading VarUInt ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading VarUInt had leftover bits from write!');
-    });
+  test('To/from bytes', () {
+    int v = -2349599555553;
+    BitBuffer buf = BitBuffer();
+    buf.writer().writeInt(v);
+    buf.writer().writeInt(-v * 33);
+    buf.writer().writeInt(16);
+    BitBuffer buf2 = BitBuffer.fromUInt8List(buf.toUInt8List());
+    expect(buf2.getLongs(), equals(buf.getLongs()));
+  });
 
-    test('Write VarInt ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeVarInt(i);
-      int out = buf.readVarInt();
-      expect(out, equals(i), reason: 'Reading VarInt ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading VarInt had leftover bits from write!');
-    });
+  test('To/from Strings', () {
+    int v = -2349599555553;
+    BitBuffer buf = BitBuffer();
+    buf.writer().writeInt(v);
+    buf.writer().writeInt(-v * 33);
+    buf.writer().writeInt(16);
+    BitBuffer buf2 = BitBuffer.fromBase64Compressed(buf.toBase64Compressed());
+    expect(buf2.getLongs(), equals(buf.getLongs()));
+  });
+  String x =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()_+-=[]{};':\",./<>?`~";
 
-    test('Write VarInt ${-i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeVarInt(-i);
-      int out = buf.readVarInt();
-      expect(out, equals(-i),
-          reason: 'Reading VarInt ${-i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading VarInt had leftover bits from write!');
-    });
+  test(
+      'Test writeString',
+      () => expect(x,
+          equals((BitBuffer()..writer().writeString(x)).reader().readString()),
+          reason: 'Failed to readString ${x}'));
+
+  test(
+      'Test writeLinearVarString',
+      () => expect(
+          x,
+          equals((BitBuffer()..writer().writeLinearVarString(x))
+              .reader()
+              .readLinearVarString()),
+          reason: 'Failed to readLinearVarString ${x}'));
+
+  for (double i in testDoubles) {
+    test(
+        'Test writeDouble',
+        () => expect(
+            i,
+            equals(
+                (BitBuffer()..writer().writeDouble(i)).reader().readDouble()),
+            reason: 'Failed to writeDouble ${i}'));
+    test(
+        'Test writeUDouble',
+        () => expect(
+            i.abs(),
+            equals((BitBuffer()..writer().writeDouble(i.abs(), signed: false))
+                .reader()
+                .readDouble(signed: false)),
+            reason: 'Failed to writeDouble ${i.abs()}'));
+    test(
+        'Test writeLinearVarDouble',
+        () => expect(
+            i,
+            equals((BitBuffer()..writer().writeLinearVarDouble(i))
+                .reader()
+                .readLinearVarDouble()),
+            reason: 'Failed to writeDouble ${i}'));
+    test(
+        'Test writeSteppedVarDouble',
+        () => expect(
+            i,
+            equals((BitBuffer()..writer().writeSteppedVarDouble(i))
+                .reader()
+                .readSteppedVarDouble()),
+            reason: 'Failed to writeDouble ${i}'));
   }
 
-  for (int i = 1; i < 123456; i *= 3) {
-    test('Write UInt ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeInt(i, signed: false);
-      int out = buf.readInt(signed: false);
-      expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading UInt had leftover bits from write!');
-    });
-
-    test('Write Int ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeInt(i);
-      int out = buf.readInt();
-      expect(out, equals(i), reason: 'Reading Int ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading Int had leftover bits from write!');
-    });
-
-    test('Write VarUInt ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeVarInt(i, signed: false);
-      int out = buf.readVarInt(signed: false);
-      expect(out, equals(i),
-          reason: 'Reading VarUInt ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading VarUInt had leftover bits from write!');
-    });
-
-    test('Write VarInt ${i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeVarInt(i);
-      int out = buf.readVarInt();
-      expect(out, equals(i), reason: 'Reading VarInt ${i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading VarInt had leftover bits from write!');
-    });
-
-    test('Write VarInt ${-i}', () {
-      BitBufferOld buf = BitBufferOld();
-      buf.writeVarInt(-i);
-      int out = buf.readVarInt();
-      expect(out, equals(-i),
-          reason: 'Reading VarInt ${-i}, got ${out} instead');
-      expect(buf.getAvailableBits(), equals(0),
-          reason: 'Reading VarInt had leftover bits from write!');
-    });
+  for (int i in testInts) {
+    test(
+        'Test writeInt',
+        () => expect(
+            i, equals((BitBuffer()..writer().writeInt(i)).reader().readInt()),
+            reason: 'Failed to writeInt ${i}'));
+    test(
+        'Test writeUInt',
+        () => expect(
+            i.abs(),
+            equals((BitBuffer()..writer().writeInt(i.abs(), signed: false))
+                .reader()
+                .readInt(signed: false)),
+            reason: 'Failed to writeInt ${i.abs()}'));
+    test(
+        'Test writeLinearVarInt',
+        () => expect(
+            i,
+            equals((BitBuffer()..writer().writeLinearVarInt(i))
+                .reader()
+                .readLinearVarInt()),
+            reason: 'Failed to writeLinearVarInt ${i}'));
+    test(
+        'Test writeSteppedVarInt',
+        () => expect(
+            i,
+            equals((BitBuffer()..writer().writeSteppedVarInt(i))
+                .reader()
+                .readSteppedVarInt()),
+            reason: 'Failed to writeSteppedVarInt ${i}'));
   }
-
-  test('BitBuffer to/from base64', () {
-    BitBufferOld buf = newRandomBuffer();
-    expect(
-        BitBufferOld.fromBase64(buf.toBase64()).toBase64(), equals(buf.toBase64()),
-        reason: 'BitBuffer to/from base64 failed');
-  });
-
-  test('BitBuffer to/from compressedBase64', () {
-    BitBufferOld buf = newRandomBuffer();
-    expect(
-        BitBufferOld.fromBase64Compressed(buf.toBase64Compressed())
-            .toBase64Compressed(),
-        equals(buf.toBase64Compressed()),
-        reason: 'BitBuffer to/from compressedBase64 failed');
-  });
-
-  test('BitBuffer to/from bytes', () {
-    BitBufferOld buf = newRandomBuffer();
-    expect(BitBufferOld.fromBytes(buf.toBytes()).toBytes(), equals(buf.toBytes()),
-        reason: 'BitBuffer to/from bytes failed');
-  });
-
-  test('BitBuffer to/from bytesBuilder', () {
-    BitBufferOld buf = newRandomBuffer();
-    expect(
-        BitBufferOld.fromByteBuilder(buf.toByteBuilder())
-            .toByteBuilder()
-            .toBytes(),
-        equals(buf.toByteBuilder().toBytes()),
-        reason: 'BitBuffer to/from bytesBuilder failed');
-  });
-
-  test('BitBuffer to/from byteBuffer', () {
-    BitBufferOld buf = newRandomBuffer();
-    expect(
-        BitBufferOld.fromByteBuffer(buf.toByteBuffer())
-            .toByteBuffer()
-            .asUint8List(),
-        equals(buf.toByteBuffer().asUint8List()),
-        reason: 'BitBuffer to/from byteBuffer failed');
-  });
-
-  test('BitBuffer to/from byteData', () {
-    BitBufferOld buf = newRandomBuffer();
-    expect(
-        BitBufferOld.fromByteData(buf.toByteData())
-            .toByteData()
-            .buffer
-            .asUint8List(),
-        equals(buf.toByteData().buffer.asUint8List()),
-        reason: 'BitBuffer to/from byteData failed');
-  });
-
-  test('Basic String', () {
-    BitBufferOld buf = BitBufferOld();
-    String s = 'Hello World!';
-    buf.writeString(s);
-    expect(s, equals(BitBufferOld.fromBytes(buf.toBytes()).readString()),
-        reason: 'BitBuffer String failed');
-  });
-
-  test('Complex String', () {
-    String x = "abcdefghijklmnopqrstuvwxyz";
-    String s =
-        List.generate(1024, (index) => x[Random().nextInt(x.length)]).join();
-    BitBufferOld buf = BitBufferOld();
-    buf.writeString(s);
-    expect(s, equals(BitBufferOld.fromBytes(buf.toBytes()).readString()),
-        reason: 'BitBuffer String failed');
-  });
-
-  test('Hypercomplex String', () {
-    String x =
-        "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()_+-=[]{};':\",./<>?`~";
-    String s =
-        List.generate(2048, (index) => x[Random().nextInt(x.length)]).join();
-    BitBufferOld buf = BitBufferOld();
-    buf.writeString(s);
-    expect(s, equals(BitBufferOld.fromBytes(buf.toBytes()).readString()),
-        reason: 'BitBuffer String failed');
-  });
-
-  test('Palette Data 2x', () {
-    PaletteData<int> p = PaletteData<int>(
-      writer: (buf, value) => buf.writeInt(value),
-      reader: (buf) => buf.readInt(),
-    );
-
-    p.write(4);
-    p.write(1);
-    p.write(4);
-    p.write(1);
-    p.write(1);
-    p.write(4);
-    p.write(1);
-    p.write(4);
-    p.write(4);
-    p.write(1);
-
-    PaletteData<int> pp = PaletteData<int>.fromBitBuffer(
-      buf: p.toBitBuffer(),
-      writer: (buf, value) => buf.writeInt(value),
-      reader: (buf) => buf.readInt(),
-    );
-
-    expect(pp.toBitBuffer().toBytes(), equals(p.toBitBuffer().toBytes()),
-        reason: 'PaletteData to/from BitBuffer failed');
-    expect(pp.getAllData(), equals(p.getAllData()),
-        reason: "Palette Data failed not equal");
-  });
-
-  test('Palette Data', () {
-    PaletteData<int> p = PaletteData<int>(
-      writer: (buf, value) => buf.writeInt(value),
-      reader: (buf) => buf.readInt(),
-    );
-
-    p.write(4);
-    p.write(47);
-    p.write(412123);
-    p.write(4);
-    p.write(7567);
-    p.write(4);
-    p.write(56756);
-    p.write(-43546);
-
-    PaletteData<int> pp = PaletteData<int>.fromBitBuffer(
-      buf: p.toBitBuffer(),
-      writer: (buf, value) => buf.writeInt(value),
-      reader: (buf) => buf.readInt(),
-    );
-
-    expect(pp.toBitBuffer().toBytes(), equals(p.toBitBuffer().toBytes()),
-        reason: 'PaletteData to/from BitBuffer failed');
-    expect(pp.getAllData(), equals(p.getAllData()),
-        reason: "Palette Data failed not equal");
-  });
 }
 
 Iterable<int> randomInts(int count) sync* {
@@ -257,17 +159,4 @@ Iterable<double> randomDoubles(int count) sync* {
         212949.113456345634564 *
         (random.nextBool() ? -1 : 1);
   }
-}
-
-BitBufferOld newRandomBuffer() {
-  BitBufferOld buf = BitBufferOld();
-  buf.writeVarInt(Random().nextInt(10) - Random().nextInt(10));
-  buf.writeVarInt(Random().nextInt(100) - Random().nextInt(100));
-  buf.writeVarInt(Random().nextInt(1000) - Random().nextInt(1000));
-  buf.writeVarInt(Random().nextInt(10000) - Random().nextInt(10000));
-  buf.writeVarInt(Random().nextInt(100000) - Random().nextInt(100000));
-  buf.writeVarInt(Random().nextInt(1000000) - Random().nextInt(1000000));
-  buf.writeVarInt(Random().nextInt(10000000) - Random().nextInt(10000000));
-  buf.writeVarInt(Random().nextInt(100000000) - Random().nextInt(100000000));
-  return buf;
 }
