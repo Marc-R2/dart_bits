@@ -6,25 +6,9 @@ import 'package:crypto/crypto.dart';
 import 'package:test/test.dart';
 
 void main() {
-  // Map<String, dynamic> j = {};
-  //
-  // for (int i = 0; i < 20; i++) {
-  //   j["${i}"] = i;
-  // }
-  //
-  // print(jsonEncode(j));
-  // print(jsonEncode(compressJson(j)));
-  // print(jsonEncode(decompressJson(compressJson(j))));
-  //
-  // print(
-  //     "Input hash  is ${sha256.convert(utf8.encode(jsonEncode(j))).toString()}");
-  // print(
-  //     "Output hash is ${sha256.convert(utf8.encode(jsonEncode(decompressJson(compressJson(j))))).toString()}");
-  // return;
-
   for (int i = 1; i < 512; i++) {
     test('Write UInt ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeInt(i, signed: false);
       int out = buf.readInt(signed: false);
       expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
@@ -33,7 +17,7 @@ void main() {
     });
 
     test('Write Int ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeInt(i);
       int out = buf.readInt();
       expect(out, equals(i), reason: 'Reading Int ${i}, got ${out} instead');
@@ -42,7 +26,7 @@ void main() {
     });
 
     test('Write VarUInt ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeVarInt(i, signed: false);
       int out = buf.readVarInt(signed: false);
       expect(out, equals(i),
@@ -52,7 +36,7 @@ void main() {
     });
 
     test('Write VarInt ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeVarInt(i);
       int out = buf.readVarInt();
       expect(out, equals(i), reason: 'Reading VarInt ${i}, got ${out} instead');
@@ -61,7 +45,7 @@ void main() {
     });
 
     test('Write VarInt ${-i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeVarInt(-i);
       int out = buf.readVarInt();
       expect(out, equals(-i),
@@ -73,7 +57,7 @@ void main() {
 
   for (int i = 1; i < 123456; i *= 3) {
     test('Write UInt ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeInt(i, signed: false);
       int out = buf.readInt(signed: false);
       expect(out, equals(i), reason: 'Reading UInt ${i}, got ${out} instead');
@@ -82,7 +66,7 @@ void main() {
     });
 
     test('Write Int ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeInt(i);
       int out = buf.readInt();
       expect(out, equals(i), reason: 'Reading Int ${i}, got ${out} instead');
@@ -91,7 +75,7 @@ void main() {
     });
 
     test('Write VarUInt ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeVarInt(i, signed: false);
       int out = buf.readVarInt(signed: false);
       expect(out, equals(i),
@@ -101,7 +85,7 @@ void main() {
     });
 
     test('Write VarInt ${i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeVarInt(i);
       int out = buf.readVarInt();
       expect(out, equals(i), reason: 'Reading VarInt ${i}, got ${out} instead');
@@ -110,7 +94,7 @@ void main() {
     });
 
     test('Write VarInt ${-i}', () {
-      BitBuffer buf = BitBuffer();
+      BitBufferOld buf = BitBufferOld();
       buf.writeVarInt(-i);
       int out = buf.readVarInt();
       expect(out, equals(-i),
@@ -121,31 +105,31 @@ void main() {
   }
 
   test('BitBuffer to/from base64', () {
-    BitBuffer buf = newRandomBuffer();
+    BitBufferOld buf = newRandomBuffer();
     expect(
-        BitBuffer.fromBase64(buf.toBase64()).toBase64(), equals(buf.toBase64()),
+        BitBufferOld.fromBase64(buf.toBase64()).toBase64(), equals(buf.toBase64()),
         reason: 'BitBuffer to/from base64 failed');
   });
 
   test('BitBuffer to/from compressedBase64', () {
-    BitBuffer buf = newRandomBuffer();
+    BitBufferOld buf = newRandomBuffer();
     expect(
-        BitBuffer.fromBase64Compressed(buf.toBase64Compressed())
+        BitBufferOld.fromBase64Compressed(buf.toBase64Compressed())
             .toBase64Compressed(),
         equals(buf.toBase64Compressed()),
         reason: 'BitBuffer to/from compressedBase64 failed');
   });
 
   test('BitBuffer to/from bytes', () {
-    BitBuffer buf = newRandomBuffer();
-    expect(BitBuffer.fromBytes(buf.toBytes()).toBytes(), equals(buf.toBytes()),
+    BitBufferOld buf = newRandomBuffer();
+    expect(BitBufferOld.fromBytes(buf.toBytes()).toBytes(), equals(buf.toBytes()),
         reason: 'BitBuffer to/from bytes failed');
   });
 
   test('BitBuffer to/from bytesBuilder', () {
-    BitBuffer buf = newRandomBuffer();
+    BitBufferOld buf = newRandomBuffer();
     expect(
-        BitBuffer.fromByteBuilder(buf.toByteBuilder())
+        BitBufferOld.fromByteBuilder(buf.toByteBuilder())
             .toByteBuilder()
             .toBytes(),
         equals(buf.toByteBuilder().toBytes()),
@@ -153,9 +137,9 @@ void main() {
   });
 
   test('BitBuffer to/from byteBuffer', () {
-    BitBuffer buf = newRandomBuffer();
+    BitBufferOld buf = newRandomBuffer();
     expect(
-        BitBuffer.fromByteBuffer(buf.toByteBuffer())
+        BitBufferOld.fromByteBuffer(buf.toByteBuffer())
             .toByteBuffer()
             .asUint8List(),
         equals(buf.toByteBuffer().asUint8List()),
@@ -163,9 +147,9 @@ void main() {
   });
 
   test('BitBuffer to/from byteData', () {
-    BitBuffer buf = newRandomBuffer();
+    BitBufferOld buf = newRandomBuffer();
     expect(
-        BitBuffer.fromByteData(buf.toByteData())
+        BitBufferOld.fromByteData(buf.toByteData())
             .toByteData()
             .buffer
             .asUint8List(),
@@ -174,10 +158,10 @@ void main() {
   });
 
   test('Basic String', () {
-    BitBuffer buf = BitBuffer();
+    BitBufferOld buf = BitBufferOld();
     String s = 'Hello World!';
     buf.writeString(s);
-    expect(s, equals(BitBuffer.fromBytes(buf.toBytes()).readString()),
+    expect(s, equals(BitBufferOld.fromBytes(buf.toBytes()).readString()),
         reason: 'BitBuffer String failed');
   });
 
@@ -185,9 +169,9 @@ void main() {
     String x = "abcdefghijklmnopqrstuvwxyz";
     String s =
         List.generate(1024, (index) => x[Random().nextInt(x.length)]).join();
-    BitBuffer buf = BitBuffer();
+    BitBufferOld buf = BitBufferOld();
     buf.writeString(s);
-    expect(s, equals(BitBuffer.fromBytes(buf.toBytes()).readString()),
+    expect(s, equals(BitBufferOld.fromBytes(buf.toBytes()).readString()),
         reason: 'BitBuffer String failed');
   });
 
@@ -196,9 +180,9 @@ void main() {
         "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789!@#\$%^&*()_+-=[]{};':\",./<>?`~";
     String s =
         List.generate(2048, (index) => x[Random().nextInt(x.length)]).join();
-    BitBuffer buf = BitBuffer();
+    BitBufferOld buf = BitBufferOld();
     buf.writeString(s);
-    expect(s, equals(BitBuffer.fromBytes(buf.toBytes()).readString()),
+    expect(s, equals(BitBufferOld.fromBytes(buf.toBytes()).readString()),
         reason: 'BitBuffer String failed');
   });
 
@@ -275,8 +259,8 @@ Iterable<double> randomDoubles(int count) sync* {
   }
 }
 
-BitBuffer newRandomBuffer() {
-  BitBuffer buf = BitBuffer();
+BitBufferOld newRandomBuffer() {
+  BitBufferOld buf = BitBufferOld();
   buf.writeVarInt(Random().nextInt(10) - Random().nextInt(10));
   buf.writeVarInt(Random().nextInt(100) - Random().nextInt(100));
   buf.writeVarInt(Random().nextInt(1000) - Random().nextInt(1000));

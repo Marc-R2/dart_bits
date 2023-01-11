@@ -28,94 +28,9 @@ const List<List<int>> _listPackedSet = [
   _bits8xLOW,
 ];
 
-typedef void BitWriter<T>(BitBuffer buf, T value);
+typedef void BitWriter<T>(BitBufferOld buf, T value);
 
-typedef T BitReader<T>(BitBuffer buf);
-
-Map<String, dynamic> decompressJson(Map<String, dynamic> d) {
-  if (d.containsKey("K0")) {
-    List<String> f = [];
-    for (int i = 0; i < d.length; i++) {
-      if (d.containsKey("K$i")) {
-        f.add(d["K$i"]);
-      }
-    }
-
-    BitBuffer buf = BitBuffer.fromBase64Compressed(f.join());
-
-    int size = buf.readInt(signed: false);
-    List<dynamic> values = [];
-    int t = 0;
-    for (int i = 0; i < size; i++) {
-      t = buf.read(2);
-      if (t == 0) {
-        values.add(buf.readInt(signed: true));
-      } else if (t == 1) {
-        values.add(buf.readByteArray(8).buffer.asByteData().getFloat64(0));
-      } else if (t == 2) {
-        values.add(buf.readBit());
-      } else if (t == 3) {
-        values.add(buf.readString());
-      }
-
-      print("Read ${values.length} $values");
-    }
-    List<String> k = buf.readString().split(",");
-    Map<String, dynamic> flat = {};
-    for (int i = 0; i < k.length; i++) {
-      flat[k[i]] = values[i];
-    }
-    return flat.expanded();
-  }
-
-  return d;
-}
-
-Map<String, dynamic> compressJson(Map<String, dynamic> d,
-    {int chunkSize = 8192}) {
-  Map<String, dynamic> flat = d.flattened();
-  BitBuffer buf = BitBuffer();
-  List<String> k = <String>[];
-  buf.writeInt(k.length, signed: false);
-
-  for (String i in flat.keys) {
-    k.add(i);
-    dynamic value = flat[i];
-    print("Write key $i $value type");
-    if (value is int) {
-      buf.writeBits(0, 2);
-      buf.writeInt(value, signed: true);
-    } else if (value is double) {
-      buf.writeBits(1, 2);
-      buf.writeByteArray(
-          (ByteData(8)..setFloat64(0, value)).buffer.asUint8List(),
-          writeSize: false);
-    } else if (value is bool) {
-      buf.writeBits(2, 2);
-      buf.addBit(value);
-    } else if (value is String) {
-      buf.writeBits(3, 2);
-      buf.writeString(value);
-    }
-  }
-
-  buf.writeString(k.join(","));
-  String s = buf.toBase64Compressed();
-  Map<String, dynamic> data = {};
-
-  for (int i = 0; i < s.length; i += chunkSize) {
-    data["K${i ~/ chunkSize}"] = s.substring(i, min(i + chunkSize, s.length));
-  }
-
-  String a = jsonEncode(data);
-  String b = jsonEncode(d);
-
-  if (a.length < b.length) {
-    return data;
-  } else {
-    return d;
-  }
-}
+typedef T BitReader<T>(BitBufferOld buf);
 
 class PaletteData<T> {
   final BitWriter<T> writer;
@@ -134,7 +49,7 @@ class PaletteData<T> {
 
   int getEntrySize() => _out.length;
 
-  int getEntryBits() => BitBuffer.getBitsNeeded(getPaletteSize() - 1);
+  int getEntryBits() => BitBufferOld.getBitsNeeded(getPaletteSize() - 1);
 
   void write(T t) {
     int id = !_palette.contains(t) ? _grow(t) : _palette.idOf(t);
@@ -148,7 +63,7 @@ class PaletteData<T> {
 
   int _grow(T t) {
     if (_palette is LinearPalette<T> &&
-        BitBuffer.getBitsNeeded(_palette.size() + 1) > linearBitsLimit) {
+        BitBufferOld.getBitsNeeded(_palette.size() + 1) > linearBitsLimit) {
       _palette = HashPalette<T>()..from(_palette);
     }
 
@@ -158,7 +73,7 @@ class PaletteData<T> {
   factory PaletteData.fromBitBuffer(
       {required BitWriter<T> writer,
       required BitReader<T> reader,
-      required BitBuffer buf}) {
+      required BitBufferOld buf}) {
     PaletteData<T> data = PaletteData<T>(writer: writer, reader: reader);
     int paletteSize = buf.readInt(signed: false);
 
@@ -174,8 +89,8 @@ class PaletteData<T> {
     return data;
   }
 
-  BitBuffer toBitBuffer() {
-    BitBuffer buf = BitBuffer();
+  BitBufferOld toBitBuffer() {
+    BitBufferOld buf = BitBufferOld();
     buf.writeInt(_palette.size(), signed: false); // TODO: Write Palette Size
 
     for (int i = 0; i < _palette.size(); i++) {
@@ -281,7 +196,7 @@ class BitLogger {
     sections["$name$postBitsWritten"] = postBitsWritten;
   }
 
-  void printExplainedBinary(BitBuffer buffer) {
+  void printExplainedBinary(BitBufferOld buffer) {
     String bu = "";
     String bits = buffer.toLiteralBinary();
     List<int> sects = sections.values.toList();
@@ -298,28 +213,29 @@ class BitLogger {
   }
 }
 
-class BitBuffer {
+class BitBufferOld {
   bool debug = false;
   List<bool> _bits = [];
 
-  BitBuffer();
+  BitBufferOld();
 
-  factory BitBuffer.fromBytes(Uint8List bytes) => BitBuffer().._setBytes(bytes);
+  factory BitBufferOld.fromBytes(Uint8List bytes) =>
+      BitBufferOld().._setBytes(bytes);
 
-  factory BitBuffer.fromByteBuilder(BytesBuilder builder) =>
-      BitBuffer.fromBytes(builder.toBytes());
+  factory BitBufferOld.fromByteBuilder(BytesBuilder builder) =>
+      BitBufferOld.fromBytes(builder.toBytes());
 
-  factory BitBuffer.fromByteBuffer(ByteBuffer buffer) =>
-      BitBuffer.fromBytes(buffer.asUint8List());
+  factory BitBufferOld.fromByteBuffer(ByteBuffer buffer) =>
+      BitBufferOld.fromBytes(buffer.asUint8List());
 
-  factory BitBuffer.fromByteData(ByteData data) =>
-      BitBuffer.fromByteBuffer(data.buffer);
+  factory BitBufferOld.fromByteData(ByteData data) =>
+      BitBufferOld.fromByteBuffer(data.buffer);
 
-  factory BitBuffer.fromBase64Compressed(String compressed) =>
-      BitBuffer.fromBytes(base64Decode(decompress(compressed)));
+  factory BitBufferOld.fromBase64Compressed(String compressed) =>
+      BitBufferOld.fromBytes(base64Decode(decompress(compressed)));
 
-  factory BitBuffer.fromBase64(String compressed) =>
-      BitBuffer.fromBytes(base64Decode(compressed));
+  factory BitBufferOld.fromBase64(String compressed) =>
+      BitBufferOld.fromBytes(base64Decode(compressed));
 
   String toLiteralBinary() => _bits.map((e) => e ? '1' : '0').join();
 
@@ -355,20 +271,20 @@ class BitBuffer {
           (index) => readVarInt(signed: false, steps: _bits4xLOW)));
 
   void writeString(String text) {
-    BitBuffer buf = BitBuffer();
+    BitBufferOld buf = BitBufferOld();
     buf.writeInt(text.length, signed: false);
     text.codeUnits.forEach((element) =>
         buf.writeVarInt(element, signed: false, steps: _bits4xLOW));
 
     PaletteData<int> stringWriter = PaletteData<int>(
-        writer: (BitBuffer buf, int value) =>
+        writer: (BitBufferOld buf, int value) =>
             buf.writeVarInt(value, signed: false, steps: _bits4xLOW),
-        reader: (BitBuffer buf) =>
+        reader: (BitBufferOld buf) =>
             buf.readVarInt(signed: false, steps: _bits4xLOW));
     for (int i = 0; i < text.length; i++) {
       stringWriter.write(text.codeUnitAt(i));
     }
-    BitBuffer buf2 = stringWriter.toBitBuffer();
+    BitBufferOld buf2 = stringWriter.toBitBuffer();
 
     if (buf2.getAvailableBits() < buf.getAvailableBits()) {
       writeBits(1, 1);
@@ -382,7 +298,7 @@ class BitBuffer {
   void writePackedVarInt(int i,
       {bool signed = true, List<List<int>> stepSet = _defaultPackedSet}) {
     int bits = getBitsNeeded(i.abs());
-    BitBuffer a = BitBuffer();
+    BitBufferOld a = BitBufferOld();
     a.writeBits(1, 2); // 1 = packed
     a.writeBits(bits, 6);
     a.writeBits(i.abs(), bits);
@@ -390,18 +306,18 @@ class BitBuffer {
       a.writeSign(i);
     }
 
-    BitBuffer b = BitBuffer();
+    BitBufferOld b = BitBufferOld();
     b.writeBits(0, 2);
     b.writeVarInt(i, signed: signed, steps: stepSet[0]);
 
-    BitBuffer c = BitBuffer();
+    BitBufferOld c = BitBufferOld();
     c.writeBits(2, 2);
     c.writeVarInt(i, signed: signed, steps: stepSet[1]);
 
-    BitBuffer d = BitBuffer();
+    BitBufferOld d = BitBufferOld();
     d.writeBits(3, 2);
     d.writeVarInt(i, signed: signed, steps: stepSet[2]);
-    List<BitBuffer> bx = [a, b, c, d];
+    List<BitBufferOld> bx = [a, b, c, d];
     addBits(bx
         .reduce((a, b) => a.getAvailableBits() < b.getAvailableBits() ? a : b)
         ._bits);
