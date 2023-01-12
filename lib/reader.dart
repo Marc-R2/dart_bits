@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:bits/bits.dart';
-import 'package:bits/codec.dart';
 
 class BitBufferReader {
   int _read = 0;
@@ -16,9 +15,6 @@ class BitBufferReader {
     _read += f;
     return t;
   }
-
-  T readBestCodec<T>(List<BitCodec<T>> codecs) => readCodec(
-      codecs[readInt(signed: false, bits: getBitsNeeded(codecs.length - 1))]);
 
   T readCodec<T>(BitCodec<T> method) => method.reader(this);
 
@@ -101,6 +97,16 @@ class BitBufferReader {
     return s;
   }
 
+  String readSteppedVarString({List<int> steps = stepCharList1b}) {
+    int length = readLinearVarInt(signed: false, maxBits: 32);
+    String s = "";
+    for (int i = 0; i < length; i++) {
+      s += String.fromCharCode(
+          readSteppedVarInt(signed: false, bitLimits: steps));
+    }
+    return s;
+  }
+
   String readString() {
     int length = readInt(signed: false, bits: 32);
     String s = "";
@@ -110,15 +116,9 @@ class BitBufferReader {
     return s;
   }
 
-  int readLinearVarInt({bool signed = true, int maxBits = 64}) {
-    int sign = signed
-        ? !readBit()
-            ? -1
-            : 1
-        : 1;
-    int bits = readInt(signed: false, bits: getBitsNeeded(maxBits));
-    return sign * readInt(signed: false, bits: bits);
-  }
+  int readLinearVarInt({bool signed = true, int maxBits = 64}) => readInt(
+      signed: signed,
+      bits: readInt(signed: false, bits: getBitsNeeded(maxBits)));
 
   int readInt({bool signed = true, int bits = 64}) =>
       (signed && !readBit()) ? -readBits(bits) : readBits(bits);

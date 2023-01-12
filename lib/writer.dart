@@ -6,7 +6,13 @@ class DummyBitBufferWriter extends BitBufferWriter {
   DummyBitBufferWriter() : super(BitBuffer());
 
   @override
-  void writeBits(int value, int bits) => _i(bits);
+  void writeBits(int value, int bits) {
+    if (bits < getBitsNeeded(value.abs())) {
+      throw Exception(
+          "Value $value is too large for $bits bits. You would need ${getBitsNeeded(value.abs())} bits to write $value. (or write up to ${pow(2, bits) - 1}) bits");
+    }
+    _i(bits);
+  }
 
   @override
   void writeBit(bool state) => _i();
@@ -15,6 +21,8 @@ class DummyBitBufferWriter extends BitBufferWriter {
 class BitBufferWriter {
   int _written = 0;
   final BitBuffer _buffer;
+
+  BitBuffer get buffer => _buffer;
 
   BitBufferWriter(this._buffer);
 
@@ -53,6 +61,13 @@ class BitBufferWriter {
     }
   }
 
+  void writeSteppedVarString(String value, {List<int> steps = stepCharList1b}) {
+    writeLinearVarInt(value.length, maxBits: 32, signed: false);
+    for (int i = 0; i < value.length; i++) {
+      writeSteppedVarInt(value.codeUnitAt(i), signed: false, bitLimits: steps);
+    }
+  }
+
   void writeBits(int value, int bits) {
     if (bits < getBitsNeeded(value.abs())) {
       throw Exception(
@@ -68,46 +83,7 @@ class BitBufferWriter {
     _buffer.setBit(_i(), state);
   }
 
-  void writeBestCodec<T>(List<BitCodec<T>> codecs, T value) {
-    int bestCodec = getBestCodec(codecs, value);
-    writeInt(bestCodec, signed: false, bits: getBitsNeeded(codecs.length - 1));
-    writeCodec(codecs[bestCodec], value);
-  }
-
-  int getBestCodec<T>(List<BitCodec<T>> codecs, T value) {
-    int smallest = -1;
-    int bestCodec = -1;
-
-    for (int i = 0; i < codecs.length; i++) {
-      int size = getCodecWrittenSize(codecs[i], value);
-
-      if (size < 0) {
-        continue;
-      }
-
-      if (smallest == -1 || size < smallest) {
-        smallest = size;
-        bestCodec = i;
-      }
-    }
-
-    if (bestCodec == -1) {
-      throw Exception("No codec could write $value");
-    }
-
-    return bestCodec;
-  }
-
   void writeCodec<T>(BitCodec<T> method, T value) => method.writer(this, value);
-
-  int getCodecWrittenSize<T>(BitCodec<T> method, T value) {
-    try {
-      return (DummyBitBufferWriter()..writeCodec(method, value))
-          .getBitsWritten();
-    } catch (e) {
-      return -1;
-    }
-  }
 
   void writeLinearVarDouble(double value,
       {bool signed = true, int maxBits = 64, int maxDecimal = 8}) {
@@ -195,12 +171,9 @@ class BitBufferWriter {
   }
 
   void writeLinearVarInt(int value, {bool signed = true, int maxBits = 64}) {
-    if (signed) {
-      writeBit(value > 0);
-    }
     int bits = getBitsNeeded(value.abs());
     writeInt(bits, signed: false, bits: getBitsNeeded(maxBits));
-    writeInt(value.abs(), signed: false, bits: bits);
+    writeInt(value, signed: signed, bits: bits);
   }
 
   void writeInt(int value, {bool signed = true, int bits = 64}) {

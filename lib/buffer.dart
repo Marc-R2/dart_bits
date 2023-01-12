@@ -6,7 +6,9 @@ import 'package:bits/bits.dart';
 import 'package:threshold/threshold.dart';
 
 const int bitsPerInt = 64;
+const List<int> stepIntLow4_16 = [3, 5, 8, 16];
 const List<int> stepList1b = [32, 64];
+const List<int> stepCharList1b = [7, 16];
 const List<int> stepList2b = [8, 16, 32, 64];
 const List<int> stepDecList1b = [2, 4];
 const List<int> stepDecList2b = [1, 2, 3, 4];

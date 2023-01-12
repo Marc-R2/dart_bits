@@ -44,40 +44,64 @@ class PaletteData<T> {
     return _palette.add(t);
   }
 
-  factory PaletteData.fromBitBuffer(
-      {required BitCodec<T> codec, required BitBuffer buf}) {
+  factory PaletteData.fromBitBufferReader(
+      {required BitCodec<T> codec, required BitBufferReader reader}) {
     PaletteData<T> data = PaletteData<T>(codec: codec);
-    BitBufferReader reader = buf.reader();
-    int paletteSize = reader.readLinearVarInt(signed: false, maxBits: 16);
-
+    int paletteSize = reader.readLinearVarInt(
+        signed: false, maxBits: 16); // TODO: Read palette size
     for (int i = 0; i < paletteSize; i++) {
-      data._palette.add(reader.readCodec(codec));
+      data._palette.add(reader.readCodec(codec)); // TODO: Read palette values
     }
 
-    int entrySize = reader.readLinearVarInt(signed: false, maxBits: 32);
+    int entryBits = getBitsNeeded(paletteSize - 1);
+    int entrySize = reader.readLinearVarInt(
+        signed: false, maxBits: 32); // TODO: Read Palette entry size
+
     for (int i = 0; i < entrySize; i++) {
-      data._out.add(
-          reader.readLinearVarInt(signed: false, maxBits: data.getEntryBits()));
+      int f = reader.readLinearVarInt(signed: false, maxBits: entryBits);
+      data._out.add(f); // TODO: Read palette entry values
     }
 
     return data;
   }
 
-  BitBuffer toBitBuffer() {
-    BitBuffer buf = BitBuffer();
-    BitBufferWriter writer = buf.writer();
+  factory PaletteData.fromBitBuffer(
+      {required BitCodec<T> codec, required BitBuffer buf}) {
+    PaletteData<T> data = PaletteData<T>(codec: codec);
+    BitBufferReader reader = buf.reader();
+    int paletteSize = reader.readLinearVarInt(
+        signed: false, maxBits: 16); // TODO: Read palette size
+    for (int i = 0; i < paletteSize; i++) {
+      data._palette.add(reader.readCodec(codec)); // TODO: Read palette values
+    }
+
+    int entryBits = getBitsNeeded(paletteSize - 1);
+    int entrySize = reader.readLinearVarInt(
+        signed: false, maxBits: 32); // TODO: Read Palette entry size
+
+    for (int i = 0; i < entrySize; i++) {
+      int f = reader.readLinearVarInt(signed: false, maxBits: entryBits);
+      data._out.add(f); // TODO: Read palette entry values
+    }
+
+    return data;
+  }
+
+  BitBuffer toBitBuffer([BitBufferWriter? writer]) {
+    BitBuffer buf = writer?.buffer ?? BitBuffer();
+    writer ??= buf.writer();
     writer.writeLinearVarInt(_palette.size(),
         signed: false, maxBits: 16); // TODO: Write Palette Size
-
     for (int i = 0; i < _palette.size(); i++) {
       writer.writeCodec(codec, _palette.get(i)); // TODO: Write Palette values
     }
-
+    int entryBits = getEntryBits();
     writer.writeLinearVarInt(_out.length,
         signed: false, maxBits: 32); // TODO: Write Entry Size
-    for (int i in _out) {
-      writer.writeLinearVarInt(i,
-          maxBits: getEntryBits()); // Write Palette Entry Values
+    for (int i = 0; i < _out.length; i++) {
+      writer.writeLinearVarInt(_out[i],
+          signed: false,
+          maxBits: entryBits); // TODO: Write Palette Entry Values
     }
 
     return buf;
