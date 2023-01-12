@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'package:bits/bits.dart';
 import 'package:threshold/threshold.dart';
@@ -130,40 +129,6 @@ BitCodec<dynamic> forceAcceptCodec<T>(BitCodec<T> codec) {
   return BitCodec(
       writer: (writer, t) => writer.writeCodec(codec, t as T),
       reader: (reader) => reader.readCodec(codec) as T);
-}
-
-Map<String, dynamic> decompressJson(Map<String, dynamic> f) {
-  if (f.containsKey("_k0")) {
-    String s = "";
-    for (int i = 0; i < f.length; i++) {
-      s += f["_k$i"];
-    }
-
-    return BitBuffer.fromBase64Compressed(s)
-        .reader()
-        .readCodec(codec_json_string) as Map<String, dynamic>;
-  }
-
-  return f;
-}
-
-Map<String, dynamic> compressJson(Map<String, dynamic> f,
-    {int split = 8192, bool force = false}) {
-  String compressed = (BitBuffer().writer()..writeCodec(codec_json_string, f))
-      .buffer
-      .toBase64Compressed();
-  Map<String, dynamic> map = {};
-  int g = 0;
-  for (int i = 0; i < compressed.length; i += split) {
-    map["_k${g++}"] =
-        compressed.substring(i, min(i + split, compressed.length));
-  }
-
-  if (!force && jsonEncode(map).length > jsonEncode(f).length) {
-    return f;
-  }
-
-  return map;
 }
 
 typedef BitCodecWriter<T> = void Function(BitBufferWriter writer, T t);
