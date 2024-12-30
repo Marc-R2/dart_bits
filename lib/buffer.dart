@@ -41,8 +41,9 @@ int getBitsNeeded(int value) {
 class BitBuffer {
   int _size = 0;
   List<int> _longs = [];
+  Endian endian;
 
-  BitBuffer();
+  BitBuffer([this.endian = Endian.little]);
 
   BitBufferWriter writer() => BitBufferWriter(this);
 
@@ -72,21 +73,21 @@ class BitBuffer {
     return bb.toBytes();
   }
 
-  factory BitBuffer.fromBase64Compressed(String compressed) =>
-      BitBuffer.fromUInt8List(base64Decode(decompress(compressed)));
+  factory BitBuffer.fromBase64Compressed(String compressed, {Endian endian = Endian.little}) =>
+      BitBuffer.fromUInt8List(base64Decode(decompress(compressed)), endian: endian);
 
-  factory BitBuffer.fromBase64(String compressed) =>
-      BitBuffer.fromUInt8List(base64Decode(compressed));
+  factory BitBuffer.fromBase64(String compressed, {Endian endian = Endian.little}) =>
+      BitBuffer.fromUInt8List(base64Decode(compressed), endian: endian);
 
-  factory BitBuffer.fromBB(BitBuffer obb) => BitBuffer.fromBits(obb.getLongs(),
-      bitsPerIndex: bitsPerInt, trueSize: obb._size);
+  factory BitBuffer.fromBB(BitBuffer obb, {Endian endian = Endian.little}) =>
+      BitBuffer.fromBits(obb.getLongs(), endian: endian, bitsPerIndex: bitsPerInt, trueSize: obb._size);
 
-  factory BitBuffer.fromUInt8List(List<int> bytes) =>
-      BitBuffer.fromBits(bytes, bitsPerIndex: 8);
+  factory BitBuffer.fromUInt8List(List<int> bytes, {Endian endian = Endian.little}) =>
+      BitBuffer.fromBits(bytes, endian: endian, bitsPerIndex: 8);
 
   factory BitBuffer.fromBits(List<int> data,
-      {int bitsPerIndex = bitsPerInt, int? trueSize}) {
-    BitBuffer bb = BitBuffer();
+      {int bitsPerIndex = bitsPerInt, int? trueSize, Endian endian = Endian.little}) {
+    BitBuffer bb = BitBuffer(endian);
     BitBufferWriter w = bb.writer();
     for (int i in data) {
       w.writeBits(i, bitsPerIndex);
@@ -135,14 +136,26 @@ class BitBuffer {
 
   void setBits(int start, int bits, int value) {
     for (int i = 0; i < bits; i++) {
-      setBit(start + i, value & (1 << i) != 0);
+      if (endian == Endian.little) {
+        setBit(start + i, value & (1 << i) != 0);
+      } else if (endian == Endian.big) {
+        setBit(start + i, value & (1 << (bits - 1 - i)) != 0);
+      } else {
+        throw ArgumentError();
+      }
     }
   }
 
   int getBits(int start, int bits) {
     int value = 0;
     for (int i = 0; i < bits; i++) {
-      value |= (getBit(start + i) ? 1 : 0) << i;
+      if (endian == Endian.little) {
+        value |= (getBit(start + i) ? 1 : 0) << i;
+      } else if (endian == Endian.big) {
+        value |= (getBit(start + (bits - 1 - i)) ? 1 : 0) << i;
+      } else {
+        throw ArgumentError();
+      }
     }
     return value;
   }
