@@ -187,13 +187,13 @@
 
   /// Example:0110001111101 (13 bits)   6(constant)+1(sign)+6(var)
   ///         011000        (LSB first) 0x06
-  ///               1       (LSB first) 0x06
+  ///               1       (LSB first) sign
   ///                111101 (LSB first) 0x2F
   writer.writeLinearVarInt(0x2F, signed: true, maxBits: 32);
 
   /// Example:01100001111101 (14 bits)   7(constant)+1(sign)+6(var)
   ///         0110000        (LSB first) 0x06
-  ///                1       (LSB first) 0x06
+  ///                1       (LSB first) sign
   ///                 111101 (LSB first) 0x2F
   writer.writeLinearVarInt(0x2F, signed: true, maxBits: 64);
 
