@@ -41,8 +41,9 @@ int getBitsNeeded(int value) {
 class BitBuffer {
   int _size = 0;
   List<int> _longs = [];
+  Endian endian;
 
-  BitBuffer();
+  BitBuffer([this.endian = Endian.little]);
 
   BitBufferWriter writer() => BitBufferWriter(this);
 
@@ -135,14 +136,26 @@ class BitBuffer {
 
   void setBits(int start, int bits, int value) {
     for (int i = 0; i < bits; i++) {
-      setBit(start + i, value & (1 << i) != 0);
+      if (endian == Endian.little) {
+        setBit(start + i, value & (1 << i) != 0);
+      } else if (endian == Endian.big) {
+        setBit(start + i, value & (1 << (bits - 1 - i)) != 0);
+      } else {
+        throw ArgumentError();
+      }
     }
   }
 
   int getBits(int start, int bits) {
     int value = 0;
     for (int i = 0; i < bits; i++) {
-      value |= (getBit(start + i) ? 1 : 0) << i;
+      if (endian == Endian.little) {
+        value |= (getBit(start + i) ? 1 : 0) << i;
+      } else if (endian == Endian.big) {
+        value |= (getBit(start + (bits - 1 - i)) ? 1 : 0) << i;
+      } else {
+        throw ArgumentError();
+      }
     }
     return value;
   }
