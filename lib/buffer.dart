@@ -73,21 +73,21 @@ class BitBuffer {
     return bb.toBytes();
   }
 
-  factory BitBuffer.fromBase64Compressed(String compressed) =>
-      BitBuffer.fromUInt8List(base64Decode(decompress(compressed)));
+  factory BitBuffer.fromBase64Compressed(String compressed, {Endian endian = Endian.little}) =>
+      BitBuffer.fromUInt8List(base64Decode(decompress(compressed)), endian: endian);
 
-  factory BitBuffer.fromBase64(String compressed) =>
-      BitBuffer.fromUInt8List(base64Decode(compressed));
+  factory BitBuffer.fromBase64(String compressed, {Endian endian = Endian.little}) =>
+      BitBuffer.fromUInt8List(base64Decode(compressed), endian: endian);
 
-  factory BitBuffer.fromBB(BitBuffer obb) => BitBuffer.fromBits(obb.getLongs(),
-      bitsPerIndex: bitsPerInt, trueSize: obb._size);
+  factory BitBuffer.fromBB(BitBuffer obb, {Endian endian = Endian.little}) =>
+      BitBuffer.fromBits(obb.getLongs(), endian: endian, bitsPerIndex: bitsPerInt, trueSize: obb._size);
 
-  factory BitBuffer.fromUInt8List(List<int> bytes) =>
-      BitBuffer.fromBits(bytes, bitsPerIndex: 8);
+  factory BitBuffer.fromUInt8List(List<int> bytes, {Endian endian = Endian.little}) =>
+      BitBuffer.fromBits(bytes, endian: endian, bitsPerIndex: 8);
 
   factory BitBuffer.fromBits(List<int> data,
-      {int bitsPerIndex = bitsPerInt, int? trueSize}) {
-    BitBuffer bb = BitBuffer();
+      {int bitsPerIndex = bitsPerInt, int? trueSize, Endian endian = Endian.little}) {
+    BitBuffer bb = BitBuffer(endian);
     BitBufferWriter w = bb.writer();
     for (int i in data) {
       w.writeBits(i, bitsPerIndex);
