@@ -1,6 +1,6 @@
 name: bits
 description: Write in bits instead of bytes for packing data tighter, and increasing headaches.
-version: 1.3.2
+version: 1.3.3
 homepage: https://github.com/ArcaneArts/bits
 environment:
   sdk: '>=2.18.6 <3.0.0'
