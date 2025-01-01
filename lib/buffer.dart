@@ -40,7 +40,7 @@ int getBitsNeeded(int value) {
 
 class BitBuffer {
   int _size = 0;
-  List<int> _longs = [];
+  final _longs = <int>[];
   Endian endian;
 
   BitBuffer([this.endian = Endian.little]);
@@ -79,8 +79,11 @@ class BitBuffer {
   factory BitBuffer.fromBase64(String compressed, {Endian endian = Endian.little}) =>
       BitBuffer.fromUInt8List(base64Decode(compressed), endian: endian);
 
-  factory BitBuffer.fromBB(BitBuffer obb, {Endian endian = Endian.little}) =>
-      BitBuffer.fromBits(obb.getLongs(), endian: endian, bitsPerIndex: bitsPerInt, trueSize: obb._size);
+  BitBuffer.fromBB(BitBuffer obb, {Endian? endian})
+      : endian = endian ?? obb.endian,
+        _size = obb._size {
+    _longs.addAll(obb._longs);
+  }
 
   factory BitBuffer.fromUInt8List(List<int> bytes, {Endian endian = Endian.little}) =>
       BitBuffer.fromBits(bytes, endian: endian, bitsPerIndex: 8);
