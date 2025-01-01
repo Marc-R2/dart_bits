@@ -238,6 +238,16 @@ void main() {
                 .readSteppedVarInt()),
             reason: 'Failed to writeSteppedVarInt ${i}'));
   }
+
+  test('Test BitBuffer.fromBB - expect copied Buffer to have same size', () {
+    final buffer = BitBuffer();
+    buffer.writer()..writeInt(0x12345678)..writeInt(0x87654321);
+
+    final buffer2 = BitBuffer.fromBB(buffer);
+    expect(buffer2.getSize(), equals(buffer.getSize()));
+    expect(buffer2.endian, equals(buffer.endian));
+    expect(buffer2.getLongs(), equals(buffer.getLongs()));
+  });
 }
 
 Iterable<int> randomInts(int count) sync* {
