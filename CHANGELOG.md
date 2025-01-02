@@ -1,3 +1,6 @@
+# 1.3.3
+* Fix "Issue with size when using BitBuffer.fromBB" #2 (Thanks Marc-R2)
+
 # 1.3.2
 * Add BitBuffer Endian Support and Enhance Documentation #1 (Thanks halifox)
 * Updated & Loosened dependency constraints
