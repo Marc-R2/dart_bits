@@ -182,4 +182,16 @@ class BitBufferWriter {
     }
     writeBits(value.abs(), bits);
   }
+
+  void writeBuffer(BitBuffer buffer, {int skip = 0, int? limit}) {
+    final size = min(buffer.getSize(), limit ?? buffer.getSize());
+    final reader = buffer.reader();
+    reader.seekTo(skip);
+
+    for (int i = skip; i < size;) {
+      final read = min(size - i, 64);
+      writeBits(reader.readBits(read), read);
+      i += read;
+    }
+  }
 }

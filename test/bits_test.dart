@@ -241,12 +241,85 @@ void main() {
 
   test('Test BitBuffer.fromBB - expect copied Buffer to have same size', () {
     final buffer = BitBuffer();
-    buffer.writer()..writeInt(0x12345678)..writeInt(0x87654321);
+    buffer.writer()
+      ..writeInt(0x12345678)
+      ..writeInt(0x87654321);
 
     final buffer2 = BitBuffer.fromBB(buffer);
     expect(buffer2.getSize(), equals(buffer.getSize()));
     expect(buffer2.endian, equals(buffer.endian));
     expect(buffer2.getLongs(), equals(buffer.getLongs()));
+  });
+
+  group('BitBufferWriter.writeBuffer', () {
+    test('Test BitBufferWriter.writeBuffer', () {
+      final buffer = BitBuffer();
+      buffer.writer()
+        ..writeInt(0x12345678)
+        ..writeInt(0x87654321);
+
+      final buffer2 = BitBuffer();
+      buffer2.writer()
+        ..writeInt(0x347865, bits: 42)
+        ..writeBuffer(buffer);
+
+      final reader = buffer2.reader();
+      expect(reader.readInt(bits: 42), equals(0x347865));
+      expect(reader.readInt(), equals(0x12345678));
+      expect(reader.readInt(), equals(0x87654321));
+      expect(buffer2.getSize(), equals(43 + 65 + 65));
+    });
+
+    test('writeBuffer writes entire buffer when no limit is set', () {
+      final sourceBuffer = BitBuffer();
+      final writer = BitBufferWriter(sourceBuffer);
+      writer.writeInt(12345, bits: 32);
+      writer.writeDouble(123.456, bits: 64);
+
+      final targetBuffer = BitBuffer();
+      final targetWriter = BitBufferWriter(targetBuffer);
+      targetWriter.writeBuffer(sourceBuffer);
+
+      final reader = targetBuffer.reader();
+      expect(reader.readInt(bits: 32), 12345);
+      expect(reader.readDouble(bits: 64), 123.456);
+    });
+
+    test('writeBuffer skips initial bytes when skip is set', () {
+      final sourceBuffer = BitBuffer();
+      final writer = BitBufferWriter(sourceBuffer);
+      writer.writeInt(12345, bits: 32, signed: false);
+      writer.writeDouble(123.456, bits: 64, signed: false);
+
+      final targetBuffer = BitBuffer();
+      final targetWriter = BitBufferWriter(targetBuffer);
+      targetWriter.writeBuffer(sourceBuffer, skip: 32);
+
+      final reader = targetBuffer.reader();
+      expect(reader.readDouble(bits: 64, signed: false), 123.456);
+    });
+
+    test('writeBuffer respects limit when set', () {
+      final sourceBuffer = BitBuffer();
+      sourceBuffer.writer()
+        ..writeInt(12345, bits: 32, signed: false)
+        ..writeDouble(123.456, bits: 64, signed: false);
+
+      final targetBuffer = BitBuffer();
+      targetBuffer.writer().writeBuffer(sourceBuffer, limit: 32);
+
+      final reader = targetBuffer.reader();
+      expect(reader.readInt(bits: 32, signed: false), 12345);
+      expect(() => reader.readDouble(bits: 64), throwsRangeError);
+    });
+
+    test('writeBuffer handles empty buffer', () {
+      final sourceBuffer = BitBuffer();
+      final targetBuffer = BitBuffer();
+
+      targetBuffer.writer().writeBuffer(sourceBuffer);
+      expect(targetBuffer.getSize(), 0);
+    });
   });
 }
 
