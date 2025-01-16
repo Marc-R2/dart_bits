@@ -125,11 +125,10 @@ BitCodec<dynamic> codec_any = BestBitCodec(codecs: [
   forceAcceptCodec<dynamic>(codec_json_string)
 ]);
 
-BitCodec<dynamic> forceAcceptCodec<T>(BitCodec<T> codec) {
-  return BitCodec(
-      writer: (writer, t) => writer.writeCodec(codec, t as T),
-      reader: (reader) => reader.readCodec(codec) as T);
-}
+BitCodec<dynamic> forceAcceptCodec<T>(BitCodec<T> codec) => BitCodec(
+      writer: (writer, t) => writer.writeCodec(codec, t),
+      reader: (reader) => reader.readCodec(codec),
+    );
 
 typedef BitCodecWriter<T> = void Function(BitBufferWriter writer, T t);
 typedef BitCodecReader<T> = T Function(BitBufferReader reader);
