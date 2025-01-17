@@ -157,4 +157,132 @@ void main() {
       expect(writer.getBitsWritten(), 134);
     });
   });
+
+  group('Backwards Codec Compatibility', () {
+    test('codec_string_compressed decodes correctly', () {
+      final buffer = BitBuffer.fromBits([100059283527975748, 293721599081145], trueSize: 114);
+      final result = BitCodec.codec_string_compressed.reader(buffer.reader());
+
+      expect(result, 'Hello, World!');
+    });
+
+    test('codec_string_stepped decodes correctly', () {
+      final buffer = BitBuffer.fromBits([100059283527975748, 293721599081145], trueSize: 114);
+      final result = BitCodec.codec_string_stepped.reader(buffer.reader());
+
+      expect(result, 'Hello, World!');
+    });
+
+    test('codec_string_linear decodes correctly', () {
+      final buffer = BitBuffer.fromBits([-6962012935230841020, -1982173524448681545, 17830542727], trueSize: 163);
+      final result = BitCodec.codec_string_linear.reader(buffer.reader());
+
+      expect(result, 'Hello, World!');
+    });
+
+    test('codec_stepped_utf16 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([24691], trueSize: 17);
+      final result = BitCodec.codec_stepped_utf16.reader(buffer.reader());
+
+      expect(result, 12345);
+    });
+
+    test('codec_string_palette decodes correctly', () {
+      final buffer = BitBuffer.fromBits([6665522876794609988, -8119263838298861111, 2629752564971], trueSize: 170);
+      final result = BitCodec.codec_string_palette.reader(buffer.reader());
+
+      expect(result, 'Hello, World!');
+    });
+
+    test('codec_int_linear_8 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([3959], trueSize: 12);
+      final result = BitCodec.codec_int_linear_8.reader(buffer.reader());
+
+      expect(result, 123);
+    });
+
+    test('codec_int_linear_16 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([790126], trueSize: 20);
+      final result = BitCodec.codec_int_linear_16.reader(buffer.reader());
+
+      expect(result, 12345);
+    });
+
+    test('codec_int_linear_64 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([31604938139], trueSize: 35);
+      final result = BitCodec.codec_int_linear_64.reader(buffer.reader());
+
+      expect(result, 123456789);
+    });
+
+    test('codec_double_linear_8 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([765041063513967], trueSize: 50);
+      final result = BitCodec.codec_double_linear_8.reader(buffer.reader());
+
+      expect(result, 123.456);
+    });
+
+    test('codec_double_linear_16 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([1530082127027919], trueSize: 51);
+      final result = BitCodec.codec_double_linear_16.reader(buffer.reader());
+
+      expect(result, 123.456);
+    });
+
+    test('codec_double_linear_64 decodes correctly', () {
+      final buffer = BitBuffer.fromBits([6120328508111631], trueSize: 53);
+      final result = BitCodec.codec_double_linear_64.reader(buffer.reader());
+
+      expect(result, 123.456);
+    });
+
+    test('codec_list decodes correctly', () {
+      final buffer = BitBuffer.fromBits([-3673361555328330108, 4014455708976232556, 17], trueSize: 134);
+      final result = BitCodec.codec_list.reader(buffer.reader());
+
+      expect(result, [1, 2, 3, 'Hello']);
+    });
+
+    test('codec_string_map decodes correctly', () {
+      final buffer = BitBuffer.fromBits([1240862530166686756, 18909578539195], trueSize: 110);
+      final result = BitCodec.codec_string_map.reader(buffer.reader());
+
+      expect(result, {'key': 'value'});
+    });
+
+    test('codec_json decodes correctly', () {
+      final buffer = BitBuffer.fromBits([2481725060333373513, 37819157078390], trueSize: 111);
+      final result = BitCodec.codec_json.reader(buffer.reader());
+
+      expect(result, {'key': 'value'});
+    });
+
+    test('codec_bool decodes correctly', () {
+      final buffer = BitBuffer.fromBits([1], trueSize: 1);
+      final result = BitCodec.codec_bool.reader(buffer.reader());
+
+      expect(result, true);
+    });
+
+    test('codec_json_string decodes correctly', () {
+      final buffer = BitBuffer.fromBits([-6762271016373209208, -3303857246427454941, 7], trueSize: 131);
+      final result = BitCodec.codec_json_string.reader(buffer.reader());
+
+      expect(result, {'key': 'value'});
+    });
+
+    test('codec_json_string_map decodes correctly', () {
+      final buffer = BitBuffer.fromBits([-6762271016373209208, -3303857246427454941, 7], trueSize: 131);
+      final result = BitCodec.codec_json_string_map.reader(buffer.reader());
+
+      expect(result, {'key': 'value'});
+    });
+
+    test('codec_any decodes correctly', () {
+      final buffer = BitBuffer.fromBits([4014455708976233542, 1203083669836369942, 17], trueSize: 134);
+      final result = BitCodec.codec_any.reader(buffer.reader());
+
+      expect(result, 'Hello, World!');
+    });
+  });
 }
