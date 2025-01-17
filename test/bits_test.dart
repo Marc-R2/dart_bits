@@ -52,9 +52,11 @@ void main() {
       "a",
       "c"
     ];
-    BitCodec<String> codec = BitCodec<String>(
-        writer: (BitBufferWriter writer, String t) => writer.writeString(t),
-        reader: (BitBufferReader reader) => reader.readString());
+    BitCodec<String> codec = SimpleBitCodec<String>(
+      writer: (BitBufferWriter writer, String t) => writer.writeString(t),
+      reader: (BitBufferReader reader) => reader.readString(),
+    );
+
     PaletteData<String> p = PaletteData<String>(codec: codec);
     data.forEach((e) => p.write(e));
     BitBuffer buffer = p.toBitBuffer();

@@ -1,0 +1,31 @@
+name: Coverage
+
+on:
+  push:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - uses: dart-lang/setup-dart@v1
+
+      - name: Install dependencies
+        run: dart pub get
+
+      - name: Analyze project source
+        run: dart analyze
+
+      - name: Run and upload coverage for all tests
+        run: |
+          set -e
+          dart pub global activate coverage
+
+          echo "Running full test suite and uploading coverage..."
+          dart pub global run coverage:test_with_coverage --branch-coverage --function-coverage
+          bash <(curl -s https://codecov.io/bash) -t ${{ secrets.CODECOV_TOKEN }} -f ./coverage/lcov.info -F all_tests

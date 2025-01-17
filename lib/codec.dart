@@ -3,159 +3,327 @@ import 'dart:convert';
 import 'package:bits/bits.dart';
 import 'package:threshold/threshold.dart';
 
-BitCodec<String> codec_string_compressed = BitCodec<String>(
-    writer: (w, t) => w.writeSteppedVarString(compress(t)),
-    reader: (r) => decompress(r.readSteppedVarString()));
-BitCodec<String> codec_string_stepped = BitCodec<String>(
-    writer: (w, t) => w.writeSteppedVarString(t),
-    reader: (r) => r.readSteppedVarString());
-BitCodec<String> codec_string_linear = BitCodec<String>(
-    writer: (w, t) => w.writeLinearVarString(t),
-    reader: (r) => r.readLinearVarString());
-BitCodec<int> codec_stepped_utf16 = BitCodec<int>(
-    writer: (w, t) =>
-        w.writeSteppedVarInt(t, signed: false, bitLimits: stepCharList1b),
-    reader: (r) =>
-        r.readSteppedVarInt(signed: false, bitLimits: stepCharList1b));
-BitCodec<String> codec_string_palette = BitCodec<String>(
-    writer: (w, t) {
-      PaletteData<int> palette = PaletteData<int>(codec: codec_stepped_utf16);
-      t.codeUnits.forEach((c) => palette.write(c));
-      palette.toBitBuffer(w);
-    },
-    reader: (r) =>
-        PaletteData.fromBitBufferReader(codec: codec_stepped_utf16, reader: r)
-            .getAllData()
-            .map((e) => String.fromCharCode(e))
-            .join());
-BitCodec<String> codec_string_best = BestBitCodec<String>(codecs: [
-  codec_string_compressed,
-  codec_string_stepped,
-]);
-
-BitCodec<int> codec_int_stepped_4_low = BitCodec<int>(
-    writer: (w, t) => w.writeSteppedVarInt(t, bitLimits: stepIntLow4_16),
-    reader: (r) => r.readSteppedVarInt(bitLimits: stepIntLow4_16));
-BitCodec<int> codec_int_linear_8 = BitCodec<int>(
-    writer: (w, t) => w.writeLinearVarInt(t, maxBits: 8),
-    reader: (r) => r.readLinearVarInt(maxBits: 8));
-BitCodec<int> codec_int_linear_16 = BitCodec<int>(
-    writer: (w, t) => w.writeLinearVarInt(t, maxBits: 16),
-    reader: (r) => r.readLinearVarInt(maxBits: 16));
-BitCodec<int> codec_int_linear_64 = BitCodec<int>(
-    writer: (w, t) => w.writeLinearVarInt(t),
-    reader: (r) => r.readLinearVarInt());
-BitCodec<int> codec_int_best = BestBitCodec<int>(codecs: [
-  codec_int_stepped_4_low,
-  codec_int_linear_8,
-  codec_int_linear_16,
-  codec_int_linear_64
-]);
-
-BitCodec<double> codec_double_stepped_4_low = BitCodec<double>(
-    writer: (w, t) => w.writeSteppedVarDouble(t, bitLimits: stepIntLow4_16),
-    reader: (r) => r.readSteppedVarDouble(bitLimits: stepIntLow4_16));
-BitCodec<double> codec_double_linear_8 = BitCodec<double>(
-    writer: (w, t) => w.writeLinearVarDouble(t, maxBits: 8),
-    reader: (r) => r.readLinearVarDouble(maxBits: 8));
-BitCodec<double> codec_double_linear_16 = BitCodec<double>(
-    writer: (w, t) => w.writeLinearVarDouble(t, maxBits: 16),
-    reader: (r) => r.readLinearVarDouble(maxBits: 16));
-BitCodec<double> codec_double_linear_64 = BitCodec<double>(
-    writer: (w, t) => w.writeLinearVarDouble(t),
-    reader: (r) => r.readLinearVarDouble());
-BitCodec<double> codec_double_best = BestBitCodec<double>(codecs: [
-  codec_double_stepped_4_low,
-  codec_double_linear_8,
-  codec_double_linear_16,
-  codec_double_linear_64
-]);
-
-BitCodec<List<dynamic>> codec_list = BitCodec(writer: (writer, t) {
-  writer.writeCodec(codec_int_best, t.length);
-  t.forEach((e) => writer.writeCodec(codec_any, e));
-}, reader: (reader) {
-  int length = reader.readCodec(codec_int_best);
-  List<dynamic> list = <dynamic>[];
-  for (int i = 0; i < length; i++) {
-    list.add(reader.readCodec(codec_any));
-  }
-  return list;
-});
-
-BitCodec<Map<String, dynamic>> codec_string_map = BitCodec(writer: (writer, t) {
-  writer.writeCodec(codec_int_best, t.length);
-  t.forEach((key, value) {
-    writer.writeCodec(codec_string_best, key);
-    writer.writeCodec(codec_any, value);
-  });
-}, reader: (reader) {
-  int length = reader.readCodec(codec_int_best);
-  Map<String, dynamic> map = <String, dynamic>{};
-  for (int i = 0; i < length; i++) {
-    map[reader.readCodec(codec_string_best)] = reader.readCodec(codec_any);
-  }
-  return map;
-});
-
-BitCodec<Map<String, dynamic>> codec_json = BestBitCodec<Map<String, dynamic>>(
-    codecs: [codec_json_string_map, codec_string_map]);
-
-BitCodec<bool> codec_bool = BitCodec(
-    writer: (writer, t) => writer.writeBit(t),
-    reader: (reader) => reader.readBit());
-
-BitCodec<dynamic> codec_json_string = BitCodec<dynamic>(
-    writer: (writer, t) => writer.writeCodec(codec_string_best, jsonEncode(t)),
-    reader: (reader) => jsonDecode(reader.readCodec(codec_string_best)));
-
-BitCodec<Map<String, dynamic>> codec_json_string_map =
-    BitCodec<Map<String, dynamic>>(
-        writer: (writer, t) =>
-            writer.writeCodec(codec_string_best, jsonEncode(t)),
-        reader: (reader) => jsonDecode(reader.readCodec(codec_string_best)));
-
-BitCodec<dynamic> codec_any = BestBitCodec(codecs: [
-  forceAcceptCodec<String>(codec_string_best),
-  forceAcceptCodec<bool>(codec_bool),
-  forceAcceptCodec<int>(codec_int_best),
-  forceAcceptCodec<double>(codec_double_best),
-  forceAcceptCodec<List<dynamic>>(codec_list),
-  forceAcceptCodec<Map<String, dynamic>>(codec_string_map),
-  forceAcceptCodec<dynamic>(codec_json_string)
-]);
-
-BitCodec<dynamic> forceAcceptCodec<T>(BitCodec<T> codec) {
-  return BitCodec(
-      writer: (writer, t) => writer.writeCodec(codec, t as T),
-      reader: (reader) => reader.readCodec(codec) as T);
-}
-
 typedef BitCodecWriter<T> = void Function(BitBufferWriter writer, T t);
 typedef BitCodecReader<T> = T Function(BitBufferReader reader);
 
-class BitCodec<T> {
-  final BitCodecWriter<T> writer;
-  final BitCodecReader<T> reader;
+abstract class BitCodec<T> {
+  void writer(BitBufferWriter writer, T t);
 
-  BitCodec({required this.writer, required this.reader});
+  T reader(BitBufferReader reader);
 
+  BitCodec<T> variant(BitCodec<T> codec);
+
+  static const stringCompressed = SimpleBitCodec<String>(
+    writer: _stringCompressedWrite,
+    reader: _stringCompressedRead,
+  );
+
+  static void _stringCompressedWrite(BitBufferWriter w, String t) =>
+      w.writeSteppedVarString(compress(t));
+
+  static String _stringCompressedRead(BitBufferReader r) {
+    final compressed = r.readSteppedVarString();
+    if (compressed.isEmpty) return '';
+    return decompress(compressed);
+  }
+
+  static const stringStepped = SimpleBitCodec<String>(
+    writer: _stringSteppedWrite,
+    reader: _stringSteppedRead,
+  );
+
+  static void _stringSteppedWrite(BitBufferWriter w, String t) =>
+      w.writeSteppedVarString(t);
+
+  static String _stringSteppedRead(BitBufferReader r) =>
+      r.readSteppedVarString();
+
+  static const stringLinear = SimpleBitCodec<String>(
+    writer: _stringLinearWrite,
+    reader: _stringLinearRead,
+  );
+
+  static void _stringLinearWrite(BitBufferWriter w, String t) =>
+      w.writeLinearVarString(t);
+
+  static String _stringLinearRead(BitBufferReader r) => r.readLinearVarString();
+
+  static const steppedUtf16 = SimpleBitCodec<int>(
+    writer: _steppedUtf16Write,
+    reader: _steppedUtf16Read,
+  );
+
+  static void _steppedUtf16Write(BitBufferWriter w, int t) =>
+      w.writeSteppedVarInt(t, signed: false, bitLimits: stepCharList1b);
+
+  static int _steppedUtf16Read(BitBufferReader r) =>
+      r.readSteppedVarInt(signed: false, bitLimits: stepCharList1b);
+
+  static BitCodec<String> stringPalette = SimpleBitCodec<String>(
+    writer: _stringPaletteWrite,
+    reader: _stringPaletteRead,
+  );
+
+  static void _stringPaletteWrite(BitBufferWriter w, String t) {
+    PaletteData<int> palette = PaletteData<int>(codec: steppedUtf16);
+    t.codeUnits.forEach(palette.write);
+    palette.toBitBuffer(w);
+  }
+
+  static String _stringPaletteRead(BitBufferReader r) {
+    PaletteData<int> palette =
+        PaletteData<int>.fromBitBufferReader(codec: steppedUtf16, reader: r);
+    return palette.getAllData().map((e) => String.fromCharCode(e)).join();
+  }
+
+  static const stringBest = BestBitCodec<String>(codecs: [
+    stringCompressed,
+    stringStepped,
+  ]);
+
+  static const intStepped4Low = SimpleBitCodec<int>(
+    writer: _intStepped4LowWrite,
+    reader: _intStepped4LowRead,
+  );
+
+  static void _intStepped4LowWrite(BitBufferWriter w, int t) =>
+      w.writeSteppedVarInt(t, bitLimits: stepIntLow4_16);
+
+  static int _intStepped4LowRead(BitBufferReader r) =>
+      r.readSteppedVarInt(bitLimits: stepIntLow4_16);
+
+  static const intLinear8 = SimpleBitCodec<int>(
+    writer: _intLinear8Write,
+    reader: _intLinear8Read,
+  );
+
+  static void _intLinear8Write(BitBufferWriter w, int t) =>
+      w.writeLinearVarInt(t, maxBits: 8);
+
+  static int _intLinear8Read(BitBufferReader r) =>
+      r.readLinearVarInt(maxBits: 8);
+
+  static const intLinear16 = SimpleBitCodec<int>(
+    writer: _intLinear16Write,
+    reader: _intLinear16Read,
+  );
+
+  static void _intLinear16Write(BitBufferWriter w, int t) =>
+      w.writeLinearVarInt(t, maxBits: 16);
+
+  static int _intLinear16Read(BitBufferReader r) =>
+      r.readLinearVarInt(maxBits: 16);
+
+  static const intLinear64 = SimpleBitCodec<int>(
+    writer: _intLinear64Write,
+    reader: _intLinear64Read,
+  );
+
+  static void _intLinear64Write(BitBufferWriter w, int t) =>
+      w.writeLinearVarInt(t);
+
+  static int _intLinear64Read(BitBufferReader r) => r.readLinearVarInt();
+
+  static const intBest = BestBitCodec<int>(codecs: [
+    intStepped4Low,
+    intLinear8,
+    intLinear16,
+    intLinear64,
+  ]);
+
+  static const doubleStepped4Low = SimpleBitCodec<double>(
+    writer: _doubleStepped4LowWrite,
+    reader: _doubleStepped4LowRead,
+  );
+
+  static void _doubleStepped4LowWrite(BitBufferWriter w, double t) =>
+      w.writeSteppedVarDouble(t, bitLimits: stepIntLow4_16);
+
+  static double _doubleStepped4LowRead(BitBufferReader r) =>
+      r.readSteppedVarDouble(bitLimits: stepIntLow4_16);
+
+  static const doubleLinear8 = SimpleBitCodec<double>(
+    writer: _doubleLinear8Write,
+    reader: _doubleLinear8Read,
+  );
+
+  static void _doubleLinear8Write(BitBufferWriter w, double t) =>
+      w.writeLinearVarDouble(t, maxBits: 8);
+
+  static double _doubleLinear8Read(BitBufferReader r) =>
+      r.readLinearVarDouble(maxBits: 8);
+
+  static const doubleLinear16 = SimpleBitCodec<double>(
+    writer: _doubleLinear16Write,
+    reader: _doubleLinear16Read,
+  );
+
+  static void _doubleLinear16Write(BitBufferWriter w, double t) =>
+      w.writeLinearVarDouble(t, maxBits: 16);
+
+  static double _doubleLinear16Read(BitBufferReader r) =>
+      r.readLinearVarDouble(maxBits: 16);
+
+  static const doubleLinear64 = SimpleBitCodec<double>(
+    writer: _doubleLinear64Write,
+    reader: _doubleLinear64Read,
+  );
+
+  static void _doubleLinear64Write(BitBufferWriter w, double t) =>
+      w.writeLinearVarDouble(t);
+
+  static double _doubleLinear64Read(BitBufferReader r) =>
+      r.readLinearVarDouble();
+
+  static const doubleBest = BestBitCodec<double>(codecs: [
+    doubleStepped4Low,
+    doubleLinear8,
+    doubleLinear16,
+    doubleLinear64
+  ]);
+
+  static const list = SimpleBitCodec(
+    writer: _listWrite,
+    reader: _listRead,
+  );
+
+  static void _listWrite(BitBufferWriter w, List<dynamic> t) {
+    w.writeCodec(intBest, t.length);
+    for (var e in t) {
+      w.writeCodec(any, e);
+    }
+  }
+
+  static List<dynamic> _listRead(BitBufferReader r) {
+    int length = r.readCodec(intBest);
+    List<dynamic> list = <dynamic>[];
+    for (int i = 0; i < length; i++) {
+      list.add(r.readCodec(any));
+    }
+    return list;
+  }
+
+  static const stringMap = SimpleBitCodec(
+    writer: _stringMapWrite,
+    reader: _stringMapRead,
+  );
+
+  static void _stringMapWrite(BitBufferWriter w, Map<String, dynamic> t) {
+    w.writeCodec(intBest, t.length);
+    t.forEach((key, value) {
+      w.writeCodec(stringBest, key);
+      w.writeCodec(any, value);
+    });
+  }
+
+  static Map<String, dynamic> _stringMapRead(BitBufferReader r) {
+    int length = r.readCodec(intBest);
+    Map<String, dynamic> map = <String, dynamic>{};
+    for (int i = 0; i < length; i++) {
+      map[r.readCodec(stringBest)] = r.readCodec(any);
+    }
+    return map;
+  }
+
+  static const json = BestBitCodec<Map<String, dynamic>>(
+    codecs: [jsonStringMap, stringMap],
+  );
+
+  static const boolean = SimpleBitCodec(
+    writer: _boolWrite,
+    reader: _boolRead,
+  );
+
+  static void _boolWrite(BitBufferWriter w, bool t) => w.writeBit(t);
+
+  static bool _boolRead(BitBufferReader r) => r.readBit();
+
+  static const jsonString = SimpleBitCodec<dynamic>(
+    writer: _jsonStringWrite,
+    reader: _jsonStringRead,
+  );
+
+  static void _jsonStringWrite(BitBufferWriter w, dynamic t) {
+    w.writeCodec(stringBest, jsonEncode(t));
+  }
+
+  static dynamic _jsonStringRead(BitBufferReader r) {
+    return jsonDecode(r.readCodec(stringBest));
+  }
+
+  static const jsonStringMap = SimpleBitCodec<Map<String, dynamic>>(
+    writer: _jsonStringMapWrite,
+    reader: _jsonStringMapRead,
+  );
+
+  static void _jsonStringMapWrite(BitBufferWriter w, Map<String, dynamic> t) =>
+      w.writeCodec(stringBest, jsonEncode(t));
+
+  static Map<String, dynamic> _jsonStringMapRead(BitBufferReader r) =>
+      jsonDecode(r.readCodec(stringBest));
+
+  static const any = BestBitCodec(codecs: [
+    RWBitCodec<String>(codec: stringBest),
+    RWBitCodec<bool>(codec: boolean),
+    RWBitCodec<int>(codec: intBest),
+    RWBitCodec<double>(codec: doubleBest),
+    RWBitCodec<List<dynamic>>(codec: list),
+    RWBitCodec<Map<String, dynamic>>(codec: stringMap),
+    RWBitCodec<dynamic>(codec: jsonString)
+  ]);
+}
+
+class RWBitCodec<T> implements BitCodec<T> {
+  const RWBitCodec({required this.codec});
+
+  final BitCodec<T> codec;
+
+  @override
+  void writer(BitBufferWriter writer, T t) => writer.writeCodec(codec, t);
+
+  @override
+  T reader(BitBufferReader reader) => reader.readCodec(codec);
+
+  @override
   BitCodec<T> variant(BitCodec<T> codec) => BestBitCodec(codecs: [this, codec]);
 }
 
-class BestBitCodec<T> extends BitCodec<T> {
+class SimpleBitCodec<T> implements BitCodec<T> {
+  const SimpleBitCodec({
+    required BitCodecWriter<T> writer,
+    required BitCodecReader<T> reader,
+  })  : _writer = writer,
+        _reader = reader;
+
+  final BitCodecWriter<T> _writer;
+  final BitCodecReader<T> _reader;
+
+  @override
+  void writer(BitBufferWriter writer, T t) => _writer(writer, t);
+
+  @override
+  T reader(BitBufferReader reader) => _reader(reader);
+
+  @override
+  BitCodec<T> variant(BitCodec<T> codec) => BestBitCodec(codecs: [this, codec]);
+}
+
+class BestBitCodec<T> implements BitCodec<T> {
   final List<BitCodec<T>> codecs;
 
-  BestBitCodec({required this.codecs})
-      : super(
-            writer: (buf, d) {
-              int bestCodec = getBestCodec(codecs, d);
-              buf.writeInt(bestCodec,
-                  signed: false, bits: getBitsNeeded(codecs.length - 1));
-              buf.writeCodec(codecs[bestCodec], d);
-            },
-            reader: (buf) => buf.readCodec(codecs[buf.readInt(
-                signed: false, bits: getBitsNeeded(codecs.length - 1))]));
+  const BestBitCodec({required this.codecs});
+
+  @override
+  void writer(BitBufferWriter writer, T t) {
+    int bestCodec = getBestCodec(codecs, t);
+    writer.writeInt(bestCodec,
+        signed: false, bits: getBitsNeeded(codecs.length - 1));
+    writer.writeCodec(codecs[bestCodec], t);
+  }
+
+  @override
+  T reader(BitBufferReader reader) => reader.readCodec(codecs[
+      reader.readInt(signed: false, bits: getBitsNeeded(codecs.length - 1))]);
 
   @override
   BestBitCodec<T> variant(BitCodec<T> codec) {
@@ -165,36 +333,30 @@ class BestBitCodec<T> extends BitCodec<T> {
 
     return BestBitCodec(codecs: [...codecs, codec]);
   }
-}
 
-int getBestCodec<T>(List<BitCodec<T>> codecs, T value) {
-  int smallest = -1;
-  int bestCodec = -1;
+  static int getBestCodec<T>(List<BitCodec<T>> codecs, T value) {
+    int bestCodec = -1;
+    int smallest = -1;
 
-  for (int i = 0; i < codecs.length; i++) {
-    int size = getCodecWrittenSize(codecs[i], value);
-
-    if (size < 0) {
-      continue;
+    for (int i = 0; i < codecs.length; i++) {
+      int size = getCodecWrittenSize(codecs[i], value);
+      if (size >= 0 && (smallest == -1 || size < smallest)) {
+        smallest = size;
+        bestCodec = i;
+      }
     }
 
-    if (smallest == -1 || size < smallest) {
-      smallest = size;
-      bestCodec = i;
+    if (bestCodec == -1) throw Exception("No codec could write $value");
+
+    return bestCodec;
+  }
+
+  static int getCodecWrittenSize<T>(BitCodec<T> codec, T value) {
+    try {
+      return (DummyBitBufferWriter()..writeCodec(codec, value))
+          .getBitsWritten();
+    } catch (e) {
+      return -1;
     }
-  }
-
-  if (bestCodec == -1) {
-    throw Exception("No codec could write $value");
-  }
-
-  return bestCodec;
-}
-
-int getCodecWrittenSize<T>(BitCodec<T> method, T value) {
-  try {
-    return (DummyBitBufferWriter()..writeCodec(method, value)).getBitsWritten();
-  } catch (e) {
-    return -1;
   }
 }
