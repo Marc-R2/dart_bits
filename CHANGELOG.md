@@ -1,3 +1,6 @@
+# 1.4.0
+* Modified the BitCodec instantiation to use SimpleBitCodec to enable const Objects for SimpleBitCodec and BestBitCodec. #4 (Thanks Marc-R2)
+
 # 1.3.4
 * feat(BitBufferWriter): writeBuffer(b) #3 (Thanks Marc-R2)
 
