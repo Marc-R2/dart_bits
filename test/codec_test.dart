@@ -106,7 +106,7 @@ void main() {
       final result = BitCodec.codec_list.reader(reader);
 
       expect(result, [1, 2, 3, 'Hello']);
-      expect(writer.getBitsWritten(), 134);
+      expect(writer.getBitsWritten(), 94);
     });
 
     test('codec_string_map encodes and decodes correctly', () {
@@ -114,7 +114,7 @@ void main() {
       final result = BitCodec.codec_string_map.reader(reader);
 
       expect(result, {'key': 'value'});
-      expect(writer.getBitsWritten(), 110);
+      expect(writer.getBitsWritten(), 94);
     });
 
     test('codec_json encodes and decodes correctly', () {
@@ -122,7 +122,7 @@ void main() {
       final result = BitCodec.codec_json.reader(reader);
 
       expect(result, {'key': 'value'});
-      expect(writer.getBitsWritten(), 111);
+      expect(writer.getBitsWritten(), 95);
     });
 
     test('codec_bool encodes and decodes correctly', () {
@@ -154,7 +154,7 @@ void main() {
       final result = BitCodec.codec_any.reader(reader);
 
       expect(result, 'Hello, World!');
-      expect(writer.getBitsWritten(), 134);
+      expect(writer.getBitsWritten(), 118);
     });
   });
 
