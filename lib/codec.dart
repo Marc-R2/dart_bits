@@ -63,7 +63,7 @@ abstract class BitCodec<T> {
 
   static void _stringPaletteWrite(BitBufferWriter w, String t) {
     PaletteData<int> palette = PaletteData<int>(codec: steppedUtf16);
-    t.codeUnits.forEach((c) => palette.write(c));
+    t.codeUnits.forEach(palette.write);
     palette.toBitBuffer(w);
   }
 
@@ -186,7 +186,9 @@ abstract class BitCodec<T> {
 
   static void _listWrite(BitBufferWriter w, List<dynamic> t) {
     w.writeCodec(intBest, t.length);
-    t.forEach((e) => w.writeCodec(any, e));
+    for (var e in t) {
+      w.writeCodec(any, e);
+    }
   }
 
   static List<dynamic> _listRead(BitBufferReader r) {
@@ -293,10 +295,13 @@ class SimpleBitCodec<T> implements BitCodec<T> {
   final BitCodecWriter<T> _writer;
   final BitCodecReader<T> _reader;
 
+  @override
   void writer(BitBufferWriter writer, T t) => _writer(writer, t);
 
+  @override
   T reader(BitBufferReader reader) => _reader(reader);
 
+  @override
   BitCodec<T> variant(BitCodec<T> codec) => BestBitCodec(codecs: [this, codec]);
 }
 
