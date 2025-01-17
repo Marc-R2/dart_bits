@@ -285,4 +285,165 @@ void main() {
       expect(result, 'Hello, World!');
     });
   });
+
+  group('BitCodec Edge Cases', () {
+    late BitBuffer buffer;
+    late BitBufferWriter writer;
+    late BitBufferReader reader;
+
+    setUp(() {
+      buffer = BitBuffer();
+      writer = buffer.writer();
+      reader = buffer.reader();
+    });
+
+    group('String Codecs Edge Cases', () {
+      test('empty string', () {
+        BitCodec.stringCompressed.writer(writer, '');
+        final result = BitCodec.stringCompressed.reader(reader);
+        expect(result, '');
+      });
+
+      test('unicode characters', () {
+        const testString = '🚀 Hello 世界! ñ € ❤️';
+        BitCodec.stringCompressed.writer(writer, testString);
+        final result = BitCodec.stringCompressed.reader(reader);
+        expect(result, testString);
+      });
+
+      test('very long string', () {
+        final longString = 'a' * 10000;
+        BitCodec.stringCompressed.writer(writer, longString);
+        final result = BitCodec.stringCompressed.reader(reader);
+        expect(result, longString);
+      });
+    });
+
+    group('Integer Codecs Edge Cases', () {
+      test('negative numbers', () {
+        BitCodec.intLinear64.writer(writer, -123456789);
+        final result = BitCodec.intLinear64.reader(reader);
+        expect(result, -123456789);
+      });
+
+      test('zero value', () {
+        BitCodec.intLinear8.writer(writer, 0);
+        final result = BitCodec.intLinear8.reader(reader);
+        expect(result, 0);
+      });
+
+      test('maximum 64-bit value', () {
+        const maxValue = 9223372036854775807; // 2^63 - 1
+        BitCodec.intLinear64.writer(writer, maxValue);
+        final result = BitCodec.intLinear64.reader(reader);
+        expect(result, maxValue);
+      });
+    });
+
+    /* TODO: Fix double edge cases
+    group('Double Codecs Edge Cases', () {
+      test('NaN value', () {
+        BitCodec.doubleLinear64.writer(writer, double.nan);
+        final result = BitCodec.doubleLinear64.reader(reader);
+        expect(result.isNaN, true);
+      });
+
+      test('infinity', () {
+        BitCodec.doubleLinear64.writer(writer, double.infinity);
+        final result = BitCodec.doubleLinear64.reader(reader);
+        expect(result, double.infinity);
+      });
+
+      test('negative infinity', () {
+        BitCodec.doubleLinear64.writer(writer, double.negativeInfinity);
+        final result = BitCodec.doubleLinear64.reader(reader);
+        expect(result, double.negativeInfinity);
+      });
+
+      test('very small number', () {
+        const smallNumber = 1.0e-308;
+        BitCodec.doubleLinear64.writer(writer, smallNumber);
+        final result = BitCodec.doubleLinear64.reader(reader);
+        expect(result, smallNumber);
+      });
+    });
+     */
+
+    group('Collection Codecs Edge Cases', () {
+      test('empty list', () {
+        BitCodec.list.writer(writer, []);
+        final result = BitCodec.list.reader(reader);
+        expect(result, []);
+      });
+
+      test('empty map', () {
+        BitCodec.stringMap.writer(writer, {});
+        final result = BitCodec.stringMap.reader(reader);
+        expect(result, {});
+      });
+
+      test('nested structures', () {
+        final nestedData = {
+          'list': [
+            1,
+            2,
+            {'nested': true}
+          ],
+          'map': {
+            'a': [1, 2, 3],
+            'b': {'deep': 'value'}
+          },
+        };
+        BitCodec.json.writer(writer, nestedData);
+        final result = BitCodec.json.reader(reader);
+        expect(result, nestedData);
+      });
+
+      test('list with mixed types', () {
+        final mixedList = [
+          1,
+          'string',
+          3.14,
+          true,
+          [1, 2],
+          {'key': 'value'},
+          null
+        ];
+        BitCodec.list.writer(writer, mixedList);
+        final result = BitCodec.list.reader(reader);
+        expect(result, mixedList);
+      });
+    });
+
+    group('Any Codec Edge Cases', () {
+      test('null value', () {
+        BitCodec.any.writer(writer, null);
+        final result = BitCodec.any.reader(reader);
+        expect(result, null);
+      });
+
+      test('complex nested structure', () {
+        const complexData = {
+          'nullValue': null,
+          'number': 42,
+          'string': '🌟',
+          'list': [
+            1,
+            null,
+            'test',
+            {'nested': true}
+          ],
+          'nestedMap': {
+            'a': [1, 2, 3],
+            'b': {
+              'deep': {'deeper': 'value'}
+            },
+          }
+        };
+        BitCodec.any.writer(writer, complexData);
+        final result = BitCodec.any.reader(reader);
+        expect(result, complexData);
+      });
+    });
+  });
 }
