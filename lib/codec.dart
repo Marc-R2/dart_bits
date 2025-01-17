@@ -325,36 +325,30 @@ class BestBitCodec<T> implements BitCodec<T> {
 
     return BestBitCodec(codecs: [...codecs, codec]);
   }
-}
 
-int getBestCodec<T>(List<BitCodec<T>> codecs, T value) {
-  int smallest = -1;
-  int bestCodec = -1;
+  static int getBestCodec<T>(List<BitCodec<T>> codecs, T value) {
+    int bestCodec = -1;
+    int smallest = -1;
 
-  for (int i = 0; i < codecs.length; i++) {
-    int size = getCodecWrittenSize(codecs[i], value);
-
-    if (size < 0) {
-      continue;
+    for (int i = 0; i < codecs.length; i++) {
+      int size = getCodecWrittenSize(codecs[i], value);
+      if (size >= 0 && (smallest == -1 || size < smallest)) {
+        smallest = size;
+        bestCodec = i;
+      }
     }
 
-    if (smallest == -1 || size < smallest) {
-      smallest = size;
-      bestCodec = i;
+    if (bestCodec == -1) throw Exception("No codec could write $value");
+
+    return bestCodec;
+  }
+
+  static int getCodecWrittenSize<T>(BitCodec<T> codec, T value) {
+    try {
+      return (DummyBitBufferWriter()..writeCodec(codec, value))
+          .getBitsWritten();
+    } catch (e) {
+      return -1;
     }
-  }
-
-  if (bestCodec == -1) {
-    throw Exception("No codec could write $value");
-  }
-
-  return bestCodec;
-}
-
-int getCodecWrittenSize<T>(BitCodec<T> method, T value) {
-  try {
-    return (DummyBitBufferWriter()..writeCodec(method, value)).getBitsWritten();
-  } catch (e) {
-    return -1;
   }
 }
