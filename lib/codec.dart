@@ -21,8 +21,11 @@ abstract class BitCodec<T> {
   static void _stringCompressedWrite(BitBufferWriter w, String t) =>
       w.writeSteppedVarString(compress(t));
 
-  static String _stringCompressedRead(BitBufferReader r) =>
-      decompress(r.readSteppedVarString());
+  static String _stringCompressedRead(BitBufferReader r) {
+    final compressed = r.readSteppedVarString();
+    if (compressed.isEmpty) return '';
+    return decompress(compressed);
+  }
 
   static const stringStepped = SimpleBitCodec<String>(
     writer: _stringSteppedWrite,
