@@ -180,75 +180,111 @@ abstract class BitCodec<T> {
     codec_double_linear_64
   ]);
 
-  static BitCodec<List<dynamic>> codec_list = SingleBitCodec(
-    writer: (writer, t) {
-      writer.writeCodec(codec_int_best, t.length);
-      t.forEach((e) => writer.writeCodec(codec_any, e));
-    },
-    reader: (reader) {
-      int length = reader.readCodec(codec_int_best);
-      List<dynamic> list = <dynamic>[];
-      for (int i = 0; i < length; i++) {
-        list.add(reader.readCodec(codec_any));
-      }
-      return list;
-    },
+  static const codec_list = SingleBitCodec(
+    writer: _list_write,
+    reader: _list_read,
   );
 
-  static BitCodec<Map<String, dynamic>> codec_string_map = SingleBitCodec(
-    writer: (writer, t) {
-      writer.writeCodec(codec_int_best, t.length);
-      t.forEach((key, value) {
-        writer.writeCodec(codec_string_best, key);
-        writer.writeCodec(codec_any, value);
-      });
-    },
-    reader: (reader) {
-      int length = reader.readCodec(codec_int_best);
-      Map<String, dynamic> map = <String, dynamic>{};
-      for (int i = 0; i < length; i++) {
-        map[reader.readCodec(codec_string_best)] = reader.readCodec(codec_any);
-      }
-      return map;
-    },
+  static void _list_write(BitBufferWriter w, List<dynamic> t) {
+    w.writeCodec(codec_int_best, t.length);
+    t.forEach((e) => w.writeCodec(codec_any, e));
+  }
+
+  static List<dynamic> _list_read(BitBufferReader r) {
+    int length = r.readCodec(codec_int_best);
+    List<dynamic> list = <dynamic>[];
+    for (int i = 0; i < length; i++) {
+      list.add(r.readCodec(codec_any));
+    }
+    return list;
+  }
+
+  static const codec_string_map = SingleBitCodec(
+    writer: _string_map_write,
+    reader: _string_map_read,
   );
 
-  static BitCodec<Map<String, dynamic>> codec_json =
-      BestBitCodec<Map<String, dynamic>>(
+  static void _string_map_write(BitBufferWriter w, Map<String, dynamic> t) {
+    w.writeCodec(codec_int_best, t.length);
+    t.forEach((key, value) {
+      w.writeCodec(codec_string_best, key);
+      w.writeCodec(codec_any, value);
+    });
+  }
+
+  static Map<String, dynamic> _string_map_read(BitBufferReader r) {
+    int length = r.readCodec(codec_int_best);
+    Map<String, dynamic> map = <String, dynamic>{};
+    for (int i = 0; i < length; i++) {
+      map[r.readCodec(codec_string_best)] = r.readCodec(codec_any);
+    }
+    return map;
+  }
+
+  static const codec_json = BestBitCodec<Map<String, dynamic>>(
     codecs: [codec_json_string_map, codec_string_map],
   );
 
-  static BitCodec<bool> codec_bool = SingleBitCodec(
-    writer: (writer, t) => writer.writeBit(t),
-    reader: (reader) => reader.readBit(),
+  static const codec_bool = SingleBitCodec(
+    writer: _bool_write,
+    reader: _bool_read,
   );
 
-  static BitCodec<dynamic> codec_json_string = SingleBitCodec<dynamic>(
-    writer: (writer, t) => writer.writeCodec(codec_string_best, jsonEncode(t)),
-    reader: (reader) => jsonDecode(reader.readCodec(codec_string_best)),
+  static void _bool_write(BitBufferWriter w, bool t) => w.writeBit(t);
+
+  static bool _bool_read(BitBufferReader r) => r.readBit();
+
+  static const codec_json_string = SingleBitCodec<dynamic>(
+    writer: _json_string_write,
+    reader: _json_string_read,
   );
 
-  static BitCodec<Map<String, dynamic>> codec_json_string_map =
-      SingleBitCodec<Map<String, dynamic>>(
-    writer: (writer, t) => writer.writeCodec(codec_string_best, jsonEncode(t)),
-    reader: (reader) => jsonDecode(reader.readCodec(codec_string_best)),
+  static void _json_string_write(BitBufferWriter w, dynamic t) {
+    w.writeCodec(codec_string_best, jsonEncode(t));
+  }
+
+  static dynamic _json_string_read(BitBufferReader r) {
+    return jsonDecode(r.readCodec(codec_string_best));
+  }
+
+  static const codec_json_string_map = SingleBitCodec<Map<String, dynamic>>(
+    writer: _json_string_map_write,
+    reader: _json_string_map_read,
   );
 
-  static BitCodec<dynamic> codec_any = BestBitCodec(codecs: [
-    forceAcceptCodec<String>(codec_string_best),
-    forceAcceptCodec<bool>(codec_bool),
-    forceAcceptCodec<int>(codec_int_best),
-    forceAcceptCodec<double>(codec_double_best),
-    forceAcceptCodec<List<dynamic>>(codec_list),
-    forceAcceptCodec<Map<String, dynamic>>(codec_string_map),
-    forceAcceptCodec<dynamic>(codec_json_string)
+  static void _json_string_map_write(
+      BitBufferWriter w, Map<String, dynamic> t) {
+    w.writeCodec(codec_string_best, jsonEncode(t));
+  }
+
+  static Map<String, dynamic> _json_string_map_read(BitBufferReader r) {
+    return jsonDecode(r.readCodec(codec_string_best));
+  }
+
+  static const codec_any = BestBitCodec(codecs: [
+    RWBitCodec<String>(codec: codec_string_best),
+    RWBitCodec<bool>(codec: codec_bool),
+    RWBitCodec<int>(codec: codec_int_best),
+    RWBitCodec<double>(codec: codec_double_best),
+    RWBitCodec<List<dynamic>>(codec: codec_list),
+    RWBitCodec<Map<String, dynamic>>(codec: codec_string_map),
+    RWBitCodec<dynamic>(codec: codec_json_string)
   ]);
+}
 
-  static SingleBitCodec<dynamic> forceAcceptCodec<T>(BitCodec<T> codec) =>
-      SingleBitCodec(
-        writer: (writer, t) => writer.writeCodec(codec, t),
-        reader: (reader) => reader.readCodec(codec),
-      );
+class RWBitCodec<T> implements BitCodec<T> {
+  const RWBitCodec({required this.codec});
+
+  final BitCodec<T> codec;
+
+  @override
+  void writer(BitBufferWriter writer, T t) => writer.writeCodec(codec, t);
+
+  @override
+  T reader(BitBufferReader reader) => reader.readCodec(codec);
+
+  @override
+  BitCodec<T> variant(BitCodec<T> codec) => BestBitCodec(codecs: [this, codec]);
 }
 
 class SingleBitCodec<T> implements BitCodec<T> {
