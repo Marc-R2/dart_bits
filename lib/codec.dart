@@ -13,7 +13,7 @@ abstract class BitCodec<T> {
 
   BitCodec<T> variant(BitCodec<T> codec);
 
-  static const codec_string_compressed = SingleBitCodec<String>(
+  static const codec_string_compressed = SimpleBitCodec<String>(
     writer: _string_compressed_write,
     reader: _string_compressed_read,
   );
@@ -24,7 +24,7 @@ abstract class BitCodec<T> {
   static String _string_compressed_read(BitBufferReader r) =>
       decompress(r.readSteppedVarString());
 
-  static const codec_string_stepped = SingleBitCodec<String>(
+  static const codec_string_stepped = SimpleBitCodec<String>(
     writer: _string_stepped_write,
     reader: _string_stepped_read,
   );
@@ -35,7 +35,7 @@ abstract class BitCodec<T> {
   static String _string_stepped_read(BitBufferReader r) =>
       r.readSteppedVarString();
 
-  static const codec_string_linear = SingleBitCodec<String>(
+  static const codec_string_linear = SimpleBitCodec<String>(
     writer: _string_linear_write,
     reader: _string_linear_read,
   );
@@ -46,7 +46,7 @@ abstract class BitCodec<T> {
   static String _string_linear_read(BitBufferReader r) =>
       r.readLinearVarString();
 
-  static const codec_stepped_utf16 = SingleBitCodec<int>(
+  static const codec_stepped_utf16 = SimpleBitCodec<int>(
     writer: _stepped_utf16_write,
     reader: _stepped_utf16_read,
   );
@@ -57,7 +57,7 @@ abstract class BitCodec<T> {
   static int _stepped_utf16_read(BitBufferReader r) =>
       r.readSteppedVarInt(signed: false, bitLimits: stepCharList1b);
 
-  static BitCodec<String> codec_string_palette = SingleBitCodec<String>(
+  static BitCodec<String> codec_string_palette = SimpleBitCodec<String>(
     writer: _string_palette_write,
     reader: _string_palette_read,
   );
@@ -79,7 +79,7 @@ abstract class BitCodec<T> {
     codec_string_stepped,
   ]);
 
-  static const codec_int_stepped_4_low = SingleBitCodec<int>(
+  static const codec_int_stepped_4_low = SimpleBitCodec<int>(
     writer: _int_stepped_4_low_write,
     reader: _int_stepped_4_low_read,
   );
@@ -90,7 +90,7 @@ abstract class BitCodec<T> {
   static int _int_stepped_4_low_read(BitBufferReader r) =>
       r.readSteppedVarInt(bitLimits: stepIntLow4_16);
 
-  static const codec_int_linear_8 = SingleBitCodec<int>(
+  static const codec_int_linear_8 = SimpleBitCodec<int>(
     writer: _int_linear_8_write,
     reader: _int_linear_8_read,
   );
@@ -101,7 +101,7 @@ abstract class BitCodec<T> {
   static int _int_linear_8_read(BitBufferReader r) =>
       r.readLinearVarInt(maxBits: 8);
 
-  static const codec_int_linear_16 = SingleBitCodec<int>(
+  static const codec_int_linear_16 = SimpleBitCodec<int>(
     writer: _int_linear_16_write,
     reader: _int_linear_16_read,
   );
@@ -112,7 +112,7 @@ abstract class BitCodec<T> {
   static int _int_linear_16_read(BitBufferReader r) =>
       r.readLinearVarInt(maxBits: 16);
 
-  static const codec_int_linear_64 = SingleBitCodec<int>(
+  static const codec_int_linear_64 = SimpleBitCodec<int>(
     writer: _int_linear_64_write,
     reader: _int_linear_64_read,
   );
@@ -129,7 +129,7 @@ abstract class BitCodec<T> {
     codec_int_linear_64,
   ]);
 
-  static const codec_double_stepped_4_low = SingleBitCodec<double>(
+  static const codec_double_stepped_4_low = SimpleBitCodec<double>(
     writer: _double_stepped_4_low_write,
     reader: _double_stepped_4_low_read,
   );
@@ -140,7 +140,7 @@ abstract class BitCodec<T> {
   static double _double_stepped_4_low_read(BitBufferReader r) =>
       r.readSteppedVarDouble(bitLimits: stepIntLow4_16);
 
-  static const codec_double_linear_8 = SingleBitCodec<double>(
+  static const codec_double_linear_8 = SimpleBitCodec<double>(
     writer: _double_linear_8_write,
     reader: _double_linear_8_read,
   );
@@ -151,7 +151,7 @@ abstract class BitCodec<T> {
   static double _double_linear_8_read(BitBufferReader r) =>
       r.readLinearVarDouble(maxBits: 8);
 
-  static const codec_double_linear_16 = SingleBitCodec<double>(
+  static const codec_double_linear_16 = SimpleBitCodec<double>(
     writer: _double_linear_16_write,
     reader: _double_linear_16_read,
   );
@@ -162,7 +162,7 @@ abstract class BitCodec<T> {
   static double _double_linear_16_read(BitBufferReader r) =>
       r.readLinearVarDouble(maxBits: 16);
 
-  static const codec_double_linear_64 = SingleBitCodec<double>(
+  static const codec_double_linear_64 = SimpleBitCodec<double>(
     writer: _double_linear_64_write,
     reader: _double_linear_64_read,
   );
@@ -180,7 +180,7 @@ abstract class BitCodec<T> {
     codec_double_linear_64
   ]);
 
-  static const codec_list = SingleBitCodec(
+  static const codec_list = SimpleBitCodec(
     writer: _list_write,
     reader: _list_read,
   );
@@ -199,7 +199,7 @@ abstract class BitCodec<T> {
     return list;
   }
 
-  static const codec_string_map = SingleBitCodec(
+  static const codec_string_map = SimpleBitCodec(
     writer: _string_map_write,
     reader: _string_map_read,
   );
@@ -225,7 +225,7 @@ abstract class BitCodec<T> {
     codecs: [codec_json_string_map, codec_string_map],
   );
 
-  static const codec_bool = SingleBitCodec(
+  static const codec_bool = SimpleBitCodec(
     writer: _bool_write,
     reader: _bool_read,
   );
@@ -234,7 +234,7 @@ abstract class BitCodec<T> {
 
   static bool _bool_read(BitBufferReader r) => r.readBit();
 
-  static const codec_json_string = SingleBitCodec<dynamic>(
+  static const codec_json_string = SimpleBitCodec<dynamic>(
     writer: _json_string_write,
     reader: _json_string_read,
   );
@@ -247,7 +247,7 @@ abstract class BitCodec<T> {
     return jsonDecode(r.readCodec(codec_string_best));
   }
 
-  static const codec_json_string_map = SingleBitCodec<Map<String, dynamic>>(
+  static const codec_json_string_map = SimpleBitCodec<Map<String, dynamic>>(
     writer: _json_string_map_write,
     reader: _json_string_map_read,
   );
@@ -287,8 +287,8 @@ class RWBitCodec<T> implements BitCodec<T> {
   BitCodec<T> variant(BitCodec<T> codec) => BestBitCodec(codecs: [this, codec]);
 }
 
-class SingleBitCodec<T> implements BitCodec<T> {
-  const SingleBitCodec({
+class SimpleBitCodec<T> implements BitCodec<T> {
+  const SimpleBitCodec({
     required BitCodecWriter<T> writer,
     required BitCodecReader<T> reader,
   })  : _writer = writer,

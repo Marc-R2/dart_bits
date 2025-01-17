@@ -52,7 +52,7 @@ void main() {
       "a",
       "c"
     ];
-    BitCodec<String> codec = SingleBitCodec<String>(
+    BitCodec<String> codec = SimpleBitCodec<String>(
       writer: (BitBufferWriter writer, String t) => writer.writeString(t),
       reader: (BitBufferReader reader) => reader.readString(),
     );
